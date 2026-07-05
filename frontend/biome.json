@@ -1,0 +1,52 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!node_modules",
+      "!dist",
+      "!.vite",
+      "!src/auto-imports.d.ts",
+      "!src/components.d.ts",
+      "!src/icons.d.ts"
+    ],
+    "ignoreUnknown": true
+  },
+  "formatter": {
+    "includes": ["**"],
+    "lineEnding": "lf",
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "linter": {
+    "includes": ["**", "!test"],
+    "rules": {
+      "recommended": true,
+      "nursery": {
+        "recommended": true
+      },
+      "security": {
+        "recommended": true
+      },
+      "performance": {
+        "recommended": true
+      },
+      "correctness": {
+        "recommended": true
+      },
+      "style": {
+        "recommended": true
+      },
+      "complexity": {
+        "recommended": true
+      },
+      "suspicious": {
+        "recommended": true
+      },
+      "a11y": {
+        "recommended": true
+      }
+    }
+  }
+}

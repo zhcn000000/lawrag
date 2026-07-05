@@ -1,0 +1,7 @@
+data/
+_assets_/
+.idea/
+.vscode/
+.obsidian/
+.env
+testdoc/

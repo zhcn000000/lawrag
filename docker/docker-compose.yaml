@@ -1,0 +1,50 @@
+services:
+  database:
+    image: localhost/postgres-age:latest
+    build:
+      context: ..
+      dockerfile: ./docker/database/Dockerfile
+    volumes:
+      - db-volume:/var/lib/postgresql/18/docker
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_PORT: 5432
+    ports:
+      - "40002:5432"
+    networks:
+      - app-network
+  web:
+    image: localhost/lawrag:latest
+    build:
+      context: ..
+      dockerfile: ./docker/web/Dockerfile
+    depends_on:
+      database:
+        condition: service_started
+    volumes:
+      - web-volume:/app/data
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_HOST: database
+      FASTAPI_HOST: "0.0.0.0"
+      FASTAPI_PORT: 8080
+      RELEASE_MODE: 1
+    ports:
+      - "40001:8080"
+    networks:
+      - app-network
+volumes:
+  db-volume:
+    driver: local
+  web-volume:
+    driver: local
+networks:
+  app-network:
+    driver: bridge

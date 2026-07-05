@@ -1,0 +1,75 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        description: "Run 'ruff check' for extremely fast Python linting"
+        entry: uv --directory backend run ruff check
+        language: system
+        types_or: [python, pyi, jupyter, pyproj]
+        exclude: "tests/.*"
+        args: [--fix]
+        pass_filenames: false
+        require_serial: true
+      - id: ruff-fix
+        name: ruff fix
+        description: "Run 'ruff check --fix' for all automatic fixes"
+        entry: uv --directory backend run ruff check
+        language: system
+        types_or: [python, pyi, jupyter, pyproj]
+        exclude: "tests/.*"
+        args: [--fix, --select, ALL, --fix-only]
+        pass_filenames: false
+        require_serial: true
+        additional_dependencies: []
+      - id: ruff-format
+        name: ruff format
+        description: "Run 'ruff format' for extremely fast Python formatting"
+        entry: uv --directory backend run ruff format
+        language: system
+        types_or: [python, pyi, jupyter]
+        exclude: "^tests/.*"
+        args: []
+        pass_filenames: false
+        require_serial: true
+        additional_dependencies: []
+      - id: ty-check
+        name: ty check
+        description: "Run ty, an extremely fast Python type checker written in Rust"
+        entry: uv --directory backend run ty check
+        language: system
+        types_or: [python, pyi, jupyter]
+        exclude: "tests/.*"
+        args: [--fix]
+        pass_filenames: false
+        require_serial: true
+        additional_dependencies: []
+      - id: biome-check
+        name: biome check
+        description: "Run 'biome check' for extremely fast JavaScript/TypeScript linting and formatting"
+        entry: pnpm -C frontend check
+        language: system
+        types_or: [javascript, ts, jsx, tsx, json, css, html]
+        args: []
+        pass_filenames: false
+        require_serial: true
+        additional_dependencies: []
+      - id: type-check
+        name: type check
+        description: "Run 'type-check' for extremely fast JavaScript/TypeScript type checking"
+        entry: pnpm -C frontend type-check
+        language: system
+        types_or: [javascript, ts, jsx, tsx]
+        args: []
+        pass_filenames: false
+        require_serial: true
+        additional_dependencies: []
+      - id: taplo-format
+        name: taplo format
+        description: "Run 'taplo format' for formatting TOML files"
+        entry: taplo format
+        language: system
+        types: [toml]
+        args: []
+        require_serial: true
+        additional_dependencies: []

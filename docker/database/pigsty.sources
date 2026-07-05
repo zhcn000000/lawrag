@@ -1,0 +1,21 @@
+Enabled: yes
+Types: deb
+URIs: https://repo.pigsty.cc/apt/infra
+Suites: generic
+Components: main
+Signed-By: /usr/share/keyrings/pigsty.gpg
+
+Enabled: yes
+Types: deb
+URIs: https://repo.pigsty.cc/apt/pgsql/trixie
+Suites: trixie
+Components: main
+Signed-By: /usr/share/keyrings/pigsty.gpg
+
+Enabled: yes
+Types: deb
+#URIs: https://repo.pigsty.cc/apt/pgdg
+URIs: https://mirrors.aliyun.com/postgresql/repos/apt
+Suites: trixie-pgdg
+Components: main
+Signed-By: /usr/share/keyrings/pgdg.gpg

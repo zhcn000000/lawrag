@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@emotion/react",
+    "strict": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "outDir": "./dist"
+  }
+}

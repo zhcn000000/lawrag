@@ -1,0 +1,135 @@
+[project]
+authors = [{ name = "bash000000", email = "m2588953@outlook.com" }]
+name = "lawrag"
+requires-python = ">= 3.14, < 3.15"
+version = "0.1.0"
+dependencies = [
+  "numpy>=2.3",
+  "pandas",
+  "scipy>=1.17.1",
+  "fastapi[standard]>=0.119.1",
+  "uvicorn[standard]>=0.32.0",
+  "uvloop",
+  "pydantic>=2.12.3",
+  "pydantic-settings>=2.11.0",
+  "pydantic-ai>=1.90.0",
+  "requests>=2.32.0",
+  "orjson>=3.11.4",
+  "anyio>=4.11.0",
+  "asyncer>=0.0.10",
+  "rich",
+  "typer>=0.21.1",
+  "sqlalchemy>=2.0.44",
+  "sqlmodel>=0.0.32",
+  "sqlalchemy-utils>=0.42.0",
+  "psycopg[binary,pool]>=3.3",
+  "pgvector>=0.4.1",
+  "openai>=2.6.1",
+  "httpx",
+  "tomlkit>=0.13.3",
+  "pydantic-monty>=0.0.4",
+  "fastmcp>=3.2.4",
+  "lxml>=5.3.0",
+  "beautifulsoup4>=4.12.0",
+  "markitdown>=0.1.5",
+  "spacy>=3.8.13",
+  "zh-core-web-trf",
+  "mmh3>=5.2.1",
+  "pyjwt>=2.12.1",
+  "tavily-python>=0.7.24",
+]
+
+[project.scripts]
+lawrag = "lawrag.__main__:main"
+
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+  "ruff>=0.15.11",
+  "ty>=0.0.32",
+  "pytest>=8.4.2",
+  "pytest-asyncio>=1.2.0",
+  "pytest-mock>=3.15.1",
+  "pytest-dependency>=0.6.1",
+  "ipython>=9.8.0",
+]
+
+[tool.uv]
+index-url = "https://mirrors.ustc.edu.cn/pypi/simple"
+
+[tool.uv.build-backend]
+module-name = "lawrag"
+module-root = ""
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://mirrors.ustc.edu.cn/pypi/simple"
+default = true
+
+[tool.uv.sources]
+zh-core-web-trf = { url = "https://gh.halonice.com/https://github.com/explosion/spacy-models/releases/download/zh_core_web_trf-3.8.0/zh_core_web_trf-3.8.0-py3-none-any.whl" }
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+target-version = "py314"
+exclude = [".venv"]
+fix = true
+
+[tool.ruff.analyze]
+preview = true
+
+[tool.ruff.lint]
+preview = true
+select = [
+  "F",
+  "E",
+  "W",
+  "I",
+  "N",
+  "FAST",
+  "PL",
+  "UP",
+  "NPY",
+  "PD",
+  "ASYNC",
+  "B",
+  "C4",
+  "FURB",
+  "PTH",
+]
+ignore = ["PLR", "PLC0415", "PLW0603", "PLW3201", "PLW0717", "ASYNC119"]
+fixable = ["ALL"]
+
+[tool.ruff.format]
+preview = true
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.ty.environment]
+root = ["./"]
+python-platform = "linux"
+python-version = "3.14"
+python = ".venv/bin/python"
+
+[tool.ty.src]
+include = ["lawrag"]
+
+[tool.ty.rules]
+division-by-zero = "error"
+possibly-unresolved-reference = "warn"
+possibly-missing-import = "warn"
+unsupported-dynamic-base = "warn"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+log_cli = true
+log_cli_level = "INFO"

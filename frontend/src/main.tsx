@@ -7,18 +7,17 @@ import { Provider } from "react-redux";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import ChatPage from "./pages/ChatPage";
-import CsvImportPage from "./pages/CsvImportPage";
 import DashboardPage from "./pages/DashboardPage";
 import DocumentUploadPage from "./pages/DocumentUploadPage";
-import GraphPage from "./pages/GraphPage";
 import LoginPage from "./pages/LoginPage";
-import SpiderPage from "./pages/SpiderPage";
 import { store } from "./store";
 
 const globalStyles = css`
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+      Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -71,11 +70,11 @@ createRoot(rootElement).render(
                 }
               >
                 <Route path="/" element={<DashboardPage />} />
-                <Route path="/graph" element={<GraphPage />} />
                 <Route path="/chat" element={<ChatPage />} />
-                <Route path="/documents/upload" element={<DocumentUploadPage />} />
-                <Route path="/documents/csv" element={<CsvImportPage />} />
-                <Route path="/spider" element={<SpiderPage />} />
+                <Route
+                  path="/documents/upload"
+                  element={<DocumentUploadPage />}
+                />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

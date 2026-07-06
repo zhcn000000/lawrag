@@ -22,30 +22,30 @@
   "linter": {
     "includes": ["**", "!test"],
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "nursery": {
-        "recommended": true
+        "preset": "recommended"
       },
       "security": {
-        "recommended": true
+        "preset": "recommended"
       },
       "performance": {
-        "recommended": true
+        "preset": "recommended"
       },
       "correctness": {
-        "recommended": true
+        "preset": "recommended"
       },
       "style": {
-        "recommended": true
+        "preset": "recommended"
       },
       "complexity": {
-        "recommended": true
+        "preset": "recommended"
       },
       "suspicious": {
-        "recommended": true
+        "preset": "recommended"
       },
       "a11y": {
-        "recommended": true
+        "preset": "recommended"
       }
     }
   }

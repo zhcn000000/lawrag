@@ -19,6 +19,7 @@ else:
 agent: Agent[ModelDeps, str] = Agent(  # type: ignore
     model=model,
     deps_type=ModelDeps,
+    output_type=str,
     toolsets=[rag_toolset, code_toolset, web_toolset],
     instructions=FIRST_INPUT_TEMPLATE,
     output_retries=5,

@@ -1,5 +1,6 @@
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
+from exa_py.api import Category, SearchType
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from pydantic import Field
@@ -81,13 +82,17 @@ async def search_web(
     max_results: Annotated[int, Field(description="返回的最大搜索结果数量")] = 5,
     include_domains: Annotated[list[str] | None, Field(description="要包含的域名列表")] = None,
     exclude_domains: Annotated[list[str] | None, Field(description="要排除的域名列表")] = None,
-) -> dict[str, Any]:
+    search_type: Annotated[SearchType | None, Field(description="搜索类型: auto/fast/deep等")] = None,
+    category: Annotated[Category | None, Field(description="搜索类别: company, news, research paper等")] = None,
+) -> str:
     try:
         return await search_web_base(
             query=query,
             max_results=max_results,
             include_domains=include_domains,
             exclude_domains=exclude_domains,
+            search_type=search_type,
+            category=category,
         )
     except Exception as e:
         raise ToolError(f"网络搜索失败: {e!s}") from e
@@ -100,7 +105,7 @@ async def search_web(
 async def extract_web(
     urls: Annotated[list[str], Field(description="要提取内容的网页URL列表")],
     query: Annotated[str | None, Field(description="可选的查询关键词，用于指导内容提取")] = None,
-) -> dict[str, Any]:
+) -> str:
     try:
         return await extract_web_base(urls=urls, query=query)
     except Exception as e:
@@ -115,7 +120,7 @@ async def crawl_web(
     url: Annotated[str, Field(description="要爬取内容的网页URL")],
     max_depth: Annotated[int, Field(description="爬取的最大深度")] = 1,
     max_pages: Annotated[int, Field(description="爬取的最大页面数量")] = 10,
-) -> dict[str, Any]:
+) -> str:
     try:
         return await crawl_web_base(url=url, max_depth=max_depth, max_pages=max_pages)
     except Exception as e:

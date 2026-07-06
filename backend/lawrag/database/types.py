@@ -1,6 +1,7 @@
 import ast
 from collections import OrderedDict
-from typing import Any, Self
+from typing import Any
+from typing import cast as typing_cast
 
 from psycopg.adapt import Dumper, Loader
 from sqlalchemy import Float, String, TypeDecorator, cast, func, type_coerce
@@ -25,8 +26,11 @@ class BM25Loader(Loader):
 
 class BM25Dumper(Dumper):
     @classmethod
-    def build(cls, oid: int) -> type[Self]:
-        cls_copy: type[Self] = type(cls.__name__, (cls,), {})  # type: ignore
+    def build(cls, oid: int) -> type[BM25Dumper]:
+        cls_copy: type[BM25Dumper] = typing_cast(
+            type[BM25Dumper],
+            type(cls.__name__, (cls,), {}),  # type: ignore
+        )
         cls_copy.oid = oid
         return cls_copy
 

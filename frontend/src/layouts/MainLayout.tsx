@@ -1,5 +1,6 @@
 import {
   CloudUploadOutlined,
+  DashboardOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -17,6 +18,11 @@ const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
 
 const menuItems: MenuProps["items"] = [
+  {
+    key: "/",
+    icon: <DashboardOutlined />,
+    label: "仪表盘",
+  },
   {
     key: "/chat",
     icon: <RobotOutlined />,

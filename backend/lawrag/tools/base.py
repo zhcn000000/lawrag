@@ -5,9 +5,10 @@ from uuid import UUID
 import httpx
 import pandas as pd
 from bs4 import BeautifulSoup
+from exa_py import AsyncExa
+from exa_py.api import Category, SearchType
 from pydantic_monty import Monty
 from rich.pretty import pretty_repr
-from tavily import AsyncTavilyClient
 
 from lawrag.database.ragmode import RAGMode
 
@@ -105,8 +106,8 @@ async def get_document_context_base(document_index: int) -> str:
 
 
 @cache
-def _get_tavily() -> AsyncTavilyClient:
-    return AsyncTavilyClient()
+def _get_exa() -> AsyncExa:
+    return AsyncExa()
 
 
 async def search_web_base(
@@ -114,48 +115,82 @@ async def search_web_base(
     max_results: int = 5,
     include_domains: list[str] | None = None,
     exclude_domains: list[str] | None = None,
-    include_image: bool = False,
-) -> dict:
+    search_type: SearchType | None = None,
+    category: Category | None = None,
+) -> str:
     try:
-        return await _get_tavily().search(
+        response = await _get_exa().search(
             query,
-            max_results=max_results,
-            include_domains=include_domains,  # type: ignore
-            exclude_domains=exclude_domains,  # type: ignore
-            include_image=include_image,
+            num_results=max_results,
+            include_domains=include_domains,
+            exclude_domains=exclude_domains,
+            type=search_type,
+            category=category,
         )
+        lines: list[str] = []
+        for i, result in enumerate(response.results, 1):
+            lines.extend([f"{i}. {result.title or '无标题'}", f"   URL: {result.url}"])
+            if result.text:
+                preview = result.text[:300].replace("\n", " ")
+                lines.append(f"   内容: {preview}...")
+            lines.append("")
+        return "\n".join(lines) if lines else "未找到搜索结果"
     except Exception as e:
-        return {"error": str(e), "results": []}
+        return "Error: " + str(e)
 
 
 async def extract_web_base(
     urls: list[str],
     query: str | None = None,
-    include_image: bool = False,
-) -> dict:
+) -> str:
     try:
-        return await _get_tavily().extract(
-            urls,
-            include_images=include_image,
-            query=query,  # type: ignore
-        )
+        kwargs: dict = {"text": {"max_characters": 5000}}
+        if query:
+            kwargs["summary"] = {"query": query}
+        response = await _get_exa().get_contents(urls, **kwargs)
+        lines = []
+        for result in response.results:
+            lines.append(f"URL: {result.url}")
+            if result.title:
+                lines.append(f"标题: {result.title}")
+            if result.text:
+                lines.append(f"内容: {result.text[:1000]}")
+            if result.summary:
+                lines.append(f"摘要: {result.summary}")
+            lines.append("")
+        return "\n".join(lines) if lines else "未提取到内容"
     except Exception as e:
-        return {"error": str(e), "results": []}
+        return "Error: " + str(e)
 
 
-async def crawl_web_base(
-    url: str,
-    max_depth: int = 1,
-    max_pages: int = 10,
-) -> dict:
-    try:
-        return await _get_tavily().crawl(
-            url,
-            max_depth=max_depth,
-            max_pages=max_pages,
-        )
-    except Exception as e:
-        return {"error": str(e), "results": []}
+async def crawl_web_base(url: str, max_depth: int = 1, max_pages: int = 10) -> str:
+    visited: set[str] = set()
+    results: list[str] = []
+
+    async def _crawl(url: str, depth: int) -> None:
+        if depth > max_depth or len(visited) >= max_pages or url in visited:
+            return
+        visited.add(url)
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+            text = soup.get_text(separator="\n").strip()
+            results.append(f"## {url}\n{text[:2000]}\n")
+            if depth < max_depth and len(visited) < max_pages:
+                for a in soup.find_all("a", href=True):
+                    href = a.get("href")
+                    if not isinstance(href, str):
+                        continue
+                    next_url = href if href.startswith("http") else url.rstrip("/") + "/" + href.lstrip("/")
+                    if next_url.startswith(("http://", "https://")):
+                        await _crawl(next_url, depth + 1)
+        except Exception:
+            pass
+
+    await _crawl(url, 1)
+    return "\n---\n".join(results) if results else f"爬取 {url} 失败"
 
 
 async def fetch_web_base(url: str, format: str = "text") -> str:

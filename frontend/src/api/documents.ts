@@ -1,5 +1,5 @@
-import type { DocumentUploadResponse } from "./types";
 import { getAuthHeaders } from "./chat";
+import type { DocumentUploadResponse } from "./types";
 
 export const uploadDocument = async (file: File): Promise<DocumentUploadResponse> => {
   const formData = new FormData();

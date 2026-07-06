@@ -1,9 +1,7 @@
 import logging
-import os
 from collections.abc import Sequence
 
-import httpx
-from httpx import HTTPError
+from httpx import AsyncClient, HTTPError, HTTPStatusError
 
 from .models import Document
 
@@ -11,31 +9,24 @@ MODEL_URL = "https://nw.lonwell.cn:10001"
 EMBEDDING_UID = "qwen3-embedding"
 RERANKER_UID = "qwen3-reranker"
 EMBEDDING_DIMS = 4096
-API_KEY = os.environ.get("SILICONFLOW_API_KEY")
-
+API_KEY = None
 _MAX_RETRIES = 10
-
-_FATAL_HTTP_STATUS = frozenset({400, 401, 403, 404, 405, 413, 422})
 
 
 async def _retry_post(url: str, json: dict, headers: dict, time_out: float = 60.0) -> dict:
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
-            async with httpx.AsyncClient(timeout=time_out) as client:
+            async with AsyncClient(timeout=time_out) as client:
                 response = await client.post(url, json=json, headers=headers)
                 response.raise_for_status()
                 return response.json()
-        except httpx.HTTPStatusError as exc:
-            if 400 <= exc.response.status_code < 500:
-                raise
-            if attempt == _MAX_RETRIES:
-                raise
-            logging.warning("HTTP %d 错误 (第 %d/%d 次)，重试中", exc.response.status_code, attempt, _MAX_RETRIES)
         except HTTPError as exc:
-            if attempt == _MAX_RETRIES:
+            if attempt == _MAX_RETRIES or isinstance(exc, HTTPStatusError) and 400 <= exc.response.status_code < 500:
                 raise
             logging.warning("HTTP 请求失败 (第 %d/%d 次): %s，重试中", attempt, _MAX_RETRIES, exc)
-    raise RuntimeError("unreachable")
+        except Exception:
+            raise
+    raise RuntimeError("达到最大重试次数，仍然无法完成请求")
 
 
 def _build_embedding_input(

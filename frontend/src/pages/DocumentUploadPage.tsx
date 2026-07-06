@@ -108,7 +108,8 @@ export default function DocumentUploadPage() {
       title: "文档分块",
       dataIndex: "documentCount",
       key: "documentCount",
-      render: (count: number | undefined) => (count !== undefined ? <Text>{count}</Text> : <Text type="secondary">-</Text>),
+      render: (count: number | undefined) =>
+        count !== undefined ? <Text>{count}</Text> : <Text type="secondary">-</Text>,
     },
   ];
 
@@ -144,17 +145,17 @@ export default function DocumentUploadPage() {
       {uploading && <Progress percent={uploadProgress} status="active" style={{ marginBottom: 16 }} />}
 
       {totalError > 0 && (
-        <Alert
-          type="warning"
-          message={`${totalError} 个文件上传失败`}
-          showIcon
-          closable
-          style={{ marginBottom: 16 }}
-        />
+        <Alert type="warning" message={`${totalError} 个文件上传失败`} showIcon closable style={{ marginBottom: 16 }} />
       )}
 
       <Card title="上传记录">
-        <Table columns={columns} dataSource={records} pagination={{ pageSize: 10 }} size="small" locale={{ emptyText: "暂无上传记录" }} />
+        <Table
+          columns={columns}
+          dataSource={records}
+          pagination={{ pageSize: 10 }}
+          size="small"
+          locale={{ emptyText: "暂无上传记录" }}
+        />
       </Card>
     </div>
   );

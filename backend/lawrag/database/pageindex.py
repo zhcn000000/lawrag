@@ -1,8 +1,9 @@
 import logging
 import pathlib
 
+from sqlalchemy import delete, select
 from sqlalchemy import func as sqla_func
-from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import col
 
 from lawrag.documents.lawparser import parse_content
@@ -43,15 +44,17 @@ class LawPageIndex:
             if row:
                 source_id = row[0]
             else:
-                source = DocumentSource(
-                    name=source_name,
-                    category=category,
-                    meta={"law_name": law_name},
+                stmt = (
+                    insert(DocumentSource)
+                    .values(
+                        name=source_name,
+                        category=category,
+                        meta={"law_name": law_name},
+                    )
+                    .returning(col(DocumentSource.id))
                 )
-                session.add(source)
-                await session.commit()
-                await session.refresh(source)
-                source_id = source.id
+                result = await session.execute(stmt)
+                source_id = result.scalar_one()
 
             count = 0
             for _law_name, article_number, article_content in articles:
@@ -62,13 +65,13 @@ class LawPageIndex:
                 if result.first():
                     continue
 
-                article = LawArticle(
+                stmt = insert(LawArticle).values(
                     source_id=source_id,
                     law_name=law_name,
                     article_number=article_number,
                     content=article_content,
                 )
-                session.add(article)
+                await session.execute(stmt)
                 count += 1
 
             await session.commit()
@@ -233,13 +236,11 @@ class LawPageIndex:
     async def adelete_law(self, law_name: str) -> int:
         """删除某部法律的所有法条, 返回删除的行数"""
         async with self.__db.asession() as session:
-            from sqlalchemy import delete as sqla_delete
-
-            result = await session.execute(
-                sqla_delete(LawArticle).where(col(LawArticle.law_name) == law_name),
-            )
+            stmt = delete(LawArticle).where(col(LawArticle.law_name) == law_name).returning(col(LawArticle.id))
+            result = await session.execute(stmt)
+            count = len(result.fetchall())
             await session.commit()
-            count = result.rowcount
+
             logging.info("Deleted %d articles from law: %s", count, law_name)
             return count
 

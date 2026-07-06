@@ -22,21 +22,25 @@ mcp = FastMCP("lawrag")
     name="search_documents",
     description="""
 根据查询语义搜索法律文档库，返回分页的文档列表。
-如果用户指定了特定法律名称，可以通过`source_name`限制搜索范围。
+如果用户指定了特定法律名称，可以通过`law_name`限制搜索范围。
 如果用户指定了特定页码/条款，可以通过`page_index`精确定位。
+支持`regex`正则表达式过滤文档内容。但是可能的话，优先不使用正则表达式避免性能问题
+返回结果包含文档内容，支持翻页查看更多结果。
 """,
 )
 async def search_documents(
     query: Annotated[str, Field(description="搜索查询语句")],
-    source_name: Annotated[str | None, Field(description="可选的来源名称过滤条件")] = None,
+    law_name: Annotated[str | None, Field(description="可选的法律名称过滤条件，如'中华人民共和国民法典'")] = None,
     page_index: Annotated[int | None, Field(description="可选的页码/条款索引")] = None,
+    regex: Annotated[str | None, Field(description="可选的正则表达式，用于过滤文档内容")] = None,
     offset: Annotated[int, Field(description="分页偏移量,默认0")] = 0,
 ) -> Annotated[str, Field(description="返回markdown格式的搜索结果表格")]:
     try:
         return await search_documents_base(
             query=query,
-            source_name=source_name,
+            law_name=law_name,
             page_index=page_index,
+            regex=regex,
             offset=offset,
         )
     except Exception as e:

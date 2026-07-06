@@ -70,6 +70,50 @@ class DocumentStore:
             chunk_overlap=chunk_overlap,
         )
 
+    async def abatch_load_from_texts(
+        self,
+        texts: list[tuple[str, UUID, str | None]],
+        chunk_size: int = 4096,
+        chunk_overlap: int = 128,
+    ) -> int:
+        all_chunks: list[tuple[UUID, str]] = []
+
+        for content, law_id, name in texts:
+            document = Document(content=content, name=name)
+            async for chunk in asplit_document(document, chunk_size, chunk_overlap):
+                all_chunks.append((law_id, chunk.content))
+
+        if not all_chunks:
+            return 0
+
+        contents = [c[1] for c in all_chunks]
+        embeddings = await aembed_documents(contents)
+
+        insert_values: list[dict] = []
+        for i, (law_id, content) in enumerate(all_chunks):
+            bmvector = await atokenize_document(content)
+            embeddings_i = embeddings[i] if i < len(embeddings) else []
+            insert_values.append(
+                {
+                    "law_id": law_id,
+                    "content": content,
+                    "vector": embeddings_i,
+                    "bmvector": dict(bmvector),
+                }
+            )
+
+        sub_batch = 10
+        async with self.__db.asession() as session:
+            total = 0
+            for i in range(0, len(insert_values), sub_batch):
+                batch = insert_values[i : i + sub_batch]
+                stmt = insert(DocumentTable).values(batch).returning(col(DocumentTable.id))
+                result = await session.execute(stmt)
+                total += len(result.fetchall())
+            await session.commit()
+
+        return total
+
     async def adelete_article_chunks(self, law_id: UUID) -> None:
         async with self.__db.asession() as session:
             await session.execute(delete(DocumentTable).where(col(DocumentTable.law_id) == law_id))

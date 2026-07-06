@@ -15,7 +15,7 @@ from lawrag.database.initdb import clean_db, init_db, reset_db
 from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragmode import RAGMode
 from lawrag.routers import app
-from lawrag.utils.environments import settings
+from lawrag.utils.environments import find_project_directory, settings
 
 cmd = Typer(pretty_exceptions_enable=False)
 pageindex_cmd = Typer(pretty_exceptions_enable=False, help="法条索引命令")
@@ -84,10 +84,12 @@ async def search(
 @pageindex_cmd.command("import")
 @runnify
 async def pageindex_import(
-    path: Annotated[Path, Argument(help="Path to law .txt file or directory")],
+    path: Annotated[Path, Argument(help="Path to law .txt file or directory")] | None = None,
     category: Annotated[str | None, Option("--category", "-c", help="Category for the laws")] = None,
 ) -> None:
     pageindex = LawPageIndex()
+    if path is None:
+        path = find_project_directory() / "testdoc"
     if path.is_dir():
         results = await pageindex.aimport_from_dir(dir_path=path, category=category)
     else:
@@ -161,7 +163,7 @@ async def pageindex_search(
 @pageindex_cmd.command("embed")
 @runnify
 async def pageindex_embed(
-    law_name: Annotated[str, Argument(help="Law name to embed from law_articles into documents")],
+    law_name: Annotated[str, Argument(help="Law name to embed from law_articles into documents")] | None = None,
     chunk_size: Annotated[int, Option("--chunk-size", "-s", help="Chunk size in tokens")] = 4096,
     chunk_overlap: Annotated[int, Option("--chunk-overlap", "-o", help="Chunk overlap in tokens")] = 128,
     batch_size: Annotated[int, Option("--batch-size", "-b", help="Articles per batch")] = 50,

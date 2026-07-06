@@ -16,13 +16,13 @@ if os.environ.get("DEEPSEEK_API_KEY"):
 else:
     model = None
     logging.warning("DEEPSEEK_API_KEY not found in environment variables. The agent will not function without a model.")
-agent: Agent[ModelDeps, str] = Agent(  # type: ignore
+agent: Agent[ModelDeps, str] = Agent(
     model=model,
     deps_type=ModelDeps,
     output_type=str,
     toolsets=[rag_toolset, code_toolset, web_toolset],
     instructions=FIRST_INPUT_TEMPLATE,
-    output_retries=5,
+    retries=5,
 )
 
 

@@ -11,6 +11,7 @@ from lawrag.tools.base import (
     get_document_context_base,
     python_repl_base,
     search_documents_base,
+    search_law_articles_base,
     search_web_base,
 )
 
@@ -43,8 +44,9 @@ async def prepare_web(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> T
     name="search_documents",
     description="""
 根据查询语义搜索法律文档库，返回分页的文档列表。
-如果用户指定了特定法律名称，可以通过`source_name`限制搜索范围。
+如果用户指定了特定法律名称，可以通过`law_name`限制搜索范围。
 如果用户指定了特定页码/条款，可以通过`page_index`精确定位。
+支持`regex`正则表达式过滤文档内容。但是可能的话，优先不使用正则表达式避免性能问题
 返回结果包含文档内容，支持翻页查看更多结果。
 """,
     prepare=prepare_rag,
@@ -52,15 +54,17 @@ async def prepare_web(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> T
 async def search_documents(
     ctx: RunContext[ModelDeps],
     query: Annotated[str, Field(description="搜索查询语句")],
-    source_name: Annotated[str | None, Field(description="可选的来源名称过滤条件")] = None,
+    law_name: Annotated[str | None, Field(description="可选的法律名称过滤条件，如'中华人民共和国民法典'")] = None,
     page_index: Annotated[int | None, Field(description="可选的页码/条款索引")] = None,
+    regex: Annotated[str | None, Field(description="可选的正则表达式，用于过滤文档内容")] = None,
     offset: Annotated[int, Field(description="分页偏移量,默认0")] = 0,
 ) -> Annotated[str, Field(description="返回markdown格式的搜索结果表格")]:
     try:
         return await search_documents_base(
             query=query,
-            source_name=source_name,
+            law_name=law_name,
             page_index=page_index,
+            regex=regex,
             offset=offset,
         )
     except Exception as e:
@@ -83,6 +87,39 @@ async def get_document_context(
         return await get_document_context_base(document_index=document_index)
     except Exception as e:
         raise ModelRetry(f"获取文档上下文失败: {e!s}") from e
+
+
+@rag_toolset.tool(
+    name="search_law_articles",
+    description="""
+根据法律名称和法条号或关键词精确查找法条内容。
+支持两种查找方式:
+1. 精确法条号查找: 指定 law_name + article_number
+2. 关键词搜索: 指定 law_name + query, 在指定法律中搜索匹配的法条
+也可不指定法律名, 直接搜索所有已导入法律的法条。
+""",
+    prepare=prepare_rag,
+)
+async def search_law_articles(
+    ctx: RunContext[ModelDeps],
+    law_name: Annotated[str, Field(description="法律名称, 例如'中华人民共和国民法典'")],
+    query: Annotated[str | None, Field(description="在法条内容中搜索的关键词")] = None,
+    article_number: Annotated[int | None, Field(description="精确法条号")] = None,
+    start: Annotated[int | None, Field(description="法条号范围起始")] = None,
+    end: Annotated[int | None, Field(description="法条号范围结束")] = None,
+    limit: Annotated[int, Field(description="返回结果数量上限")] = 10,
+) -> Annotated[str, Field(description="返回markdown格式的法条查询结果")]:
+    try:
+        return await search_law_articles_base(
+            law_name=law_name,
+            query=query,
+            article_number=article_number,
+            start=start,
+            end=end,
+            limit=limit,
+        )
+    except Exception as e:
+        raise ModelRetry(f"法条查找失败: {e!s}") from e
 
 
 @code_toolset.tool(

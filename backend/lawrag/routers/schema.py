@@ -142,3 +142,31 @@ class HistoryResponse(StatusResponse):
 
 
 ChatMessage = SystemMessageItem | UserMessageItem | AssistantMessageItem | ToolMessageItem
+
+
+class PageIndexImportRequest(BaseModel):
+    path: str
+    category: str | None = None
+
+
+class PageIndexImportResponse(StatusResponse):
+    results: list[dict[str, Any]]
+
+
+class LawArticleResponse(BaseModel):
+    id: str
+    law_name: str
+    article_number: int
+    content: str
+
+
+class LawArticleListResponse(StatusResponse):
+    articles: list[LawArticleResponse]
+
+
+class LawArticleDetailResponse(StatusResponse):
+    article: LawArticleResponse | None = None
+
+
+class LawListResponse(StatusResponse):
+    laws: list[dict[str, Any]]

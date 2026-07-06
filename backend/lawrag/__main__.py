@@ -13,12 +13,14 @@ from typer import Argument, Option, Typer
 
 from lawrag.database.document import DocumentStore
 from lawrag.database.initdb import clean_db, init_db, reset_db
+from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragmode import RAGMode
 from lawrag.routers import app
 from lawrag.utils.environments import settings
 
 cmd = Typer(pretty_exceptions_enable=False)
 ingest_cmd = Typer(pretty_exceptions_enable=False, help="文档摄入命令")
+pageindex_cmd = Typer(pretty_exceptions_enable=False, help="法条索引命令")
 
 
 @cmd.command()
@@ -118,7 +120,106 @@ async def ingest_file(
     logging.info("已导入 %d 个分块", len(doc_ids))
 
 
+@pageindex_cmd.command("import")
+@runnify
+async def pageindex_import(
+    path: Annotated[Path, Argument(help="Path to law .txt file or directory")],
+    category: Annotated[str | None, Option("--category", "-c", help="Category for the laws")] = None,
+) -> None:
+    pageindex = LawPageIndex()
+    if path.is_dir():
+        results = await pageindex.aimport_from_dir(dir_path=path, category=category)
+    else:
+        result = await pageindex.aimport_file(file_path=path, category=category)
+        results = [result]
+    total = sum(r.get("count", 0) for r in results)
+    ok = sum(1 for r in results if r.get("status") == "ok")
+    error = sum(1 for r in results if r.get("status") == "error")
+    logging.info("导入完成: %d 个文件, 共 %d 条法条 (成功 %d, 失败 %d)", len(results), total, ok, error)
+
+
+@pageindex_cmd.command("list")
+@runnify
+async def pageindex_list() -> None:
+    pageindex = LawPageIndex()
+    laws = await pageindex.alist_laws()
+    if not laws:
+        rprint("暂无已导入的法律")
+        return
+    table = Table(title="已导入法律列表", title_style="bold")
+    table.add_column("法律名称", style="green")
+    table.add_column("法条数量", style="cyan", justify="right")
+    for law in laws:
+        table.add_row(law["law_name"], str(law["article_count"]))
+    rprint(table)
+
+
+@pageindex_cmd.command("show")
+@runnify
+async def pageindex_show(
+    law_name: Annotated[str, Argument(help="Law name to show")],
+    start: Annotated[int | None, Option("--start", "-s", help="Starting article number")] = None,
+    end: Annotated[int | None, Option("--end", "-e", help="Ending article number")] = None,
+    limit: Annotated[int, Option("--limit", "-l", help="Max articles to show")] = 50,
+) -> None:
+    pageindex = LawPageIndex()
+    articles = await pageindex.aget_law_articles(law_name=law_name, start=start, end=end, limit=limit)
+    if not articles:
+        rprint(f"未找到法律 '{law_name}' 的法条")
+        return
+    table = Table(title=f"{law_name} 法条列表", title_style="bold")
+    table.add_column("条号", style="cyan", width=8)
+    table.add_column("内容", style="white")
+    for a in articles:
+        content = a["content"][:120].replace("\n", " ") + ("..." if len(a["content"]) > 120 else "")
+        table.add_row(f"第{a['article_number']}条", content)
+    rprint(table)
+
+
+@pageindex_cmd.command("search")
+@runnify
+async def pageindex_search(
+    law_name: Annotated[str, Argument(help="Law name to search in")],
+    query: Annotated[str, Argument(help="Search query")],
+    limit: Annotated[int, Option("--limit", "-l", help="Max results")] = 10,
+) -> None:
+    pageindex = LawPageIndex()
+    articles = await pageindex.asearch_articles(law_name=law_name, query=query, limit=limit)
+    if not articles:
+        rprint(f"在 '{law_name}' 中未找到匹配 '{query}' 的法条")
+        return
+    table = Table(title=f"搜索结果: '{law_name}' 中的 '{query}'", title_style="bold")
+    table.add_column("条号", style="cyan", width=8)
+    table.add_column("内容", style="white")
+    for a in articles:
+        content = a["content"][:150].replace("\n", " ") + ("..." if len(a["content"]) > 150 else "")
+        table.add_row(f"第{a['article_number']}条", content)
+    rprint(table)
+
+
+@pageindex_cmd.command("embed")
+@runnify
+async def pageindex_embed(
+    law_name: Annotated[str, Argument(help="Law name to embed from law_articles into documents")],
+    chunk_size: Annotated[int, Option("--chunk-size", "-s", help="Chunk size in tokens")] = 4096,
+    chunk_overlap: Annotated[int, Option("--chunk-overlap", "-o", help="Chunk overlap in tokens")] = 128,
+    batch_size: Annotated[int, Option("--batch-size", "-b", help="Articles per batch")] = 50,
+) -> None:
+    pageindex = LawPageIndex()
+    logging.info("开始嵌入法律 '%s' 的法条...", law_name)
+    result = await pageindex.aembed_law_articles(
+        law_name=law_name,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        batch_size=batch_size,
+    )
+    rprint(f"嵌入完成: {result['law_name']}")
+    rprint(f"  法条数: {result['articles_embedded']}")
+    rprint(f"  分块数: {result['chunks_created']}")
+
+
 cmd.add_typer(ingest_cmd, name="ingest")
+cmd.add_typer(pageindex_cmd, name="pageindex")
 
 
 def main():

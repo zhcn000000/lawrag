@@ -4,10 +4,17 @@ from uuid import UUID
 from fastapi import APIRouter, UploadFile
 
 from lawrag.database.document import DocumentStore
+from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragmode import RAGMode
 
 from .schema import (
     DocumentUploadResponse,
+    LawArticleDetailResponse,
+    LawArticleListResponse,
+    LawArticleResponse,
+    LawListResponse,
+    PageIndexImportRequest,
+    PageIndexImportResponse,
     SearchRequest,
     SearchResponse,
     SourceInfo,
@@ -121,3 +128,83 @@ async def api_delete_source(source_id: UUID) -> DocumentUploadResponse:
     except Exception as e:
         logging.exception(e)
         return DocumentUploadResponse(success=False, status=f"删除失败: {e!s}", doc_ids=[])
+
+
+@router.post("/pageindex/import")
+async def api_pageindex_import(request: PageIndexImportRequest) -> PageIndexImportResponse:
+    try:
+        pageindex = LawPageIndex()
+        path = request.path
+        import pathlib
+
+        p = pathlib.Path(path)
+        if p.is_dir():  # noqa: ASYNC240
+            results = await pageindex.aimport_from_dir(dir_path=path, category=request.category)
+        else:
+            result = await pageindex.aimport_file(file_path=path, category=request.category)
+            results = [result]
+        total = sum(r.get("count", 0) for r in results)
+        return PageIndexImportResponse(
+            success=True,
+            status=f"导入完成, 共 {total} 条法条",
+            results=results,
+        )
+    except Exception as e:
+        logging.exception(e)
+        return PageIndexImportResponse(success=False, status=f"导入失败: {e!s}", results=[])
+
+
+@router.get("/pageindex/laws")
+async def api_pageindex_list_laws() -> LawListResponse:
+    try:
+        pageindex = LawPageIndex()
+        laws = await pageindex.alist_laws()
+        return LawListResponse(success=True, status="获取法律列表成功", laws=laws)
+    except Exception as e:
+        logging.exception(e)
+        return LawListResponse(success=False, status=f"获取失败: {e!s}", laws=[])
+
+
+@router.get("/pageindex/laws/{law_name}/articles")
+async def api_pageindex_get_articles(
+    law_name: str,
+    start: int | None = None,
+    end: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> LawArticleListResponse:
+    try:
+        pageindex = LawPageIndex()
+        articles = await pageindex.aget_law_articles(
+            law_name=law_name,
+            start=start,
+            end=end,
+            limit=limit,
+            offset=offset,
+        )
+        return LawArticleListResponse(
+            success=True,
+            status=f"获取 {law_name} 法条成功",
+            articles=[LawArticleResponse(**a) for a in articles],
+        )
+    except Exception as e:
+        logging.exception(e)
+        return LawArticleListResponse(success=False, status=f"获取失败: {e!s}", articles=[])
+
+
+@router.get("/pageindex/laws/{law_name}/articles/{article_number}")
+async def api_pageindex_get_article(
+    law_name: str,
+    article_number: int,
+) -> LawArticleDetailResponse:
+    try:
+        pageindex = LawPageIndex()
+        article = await pageindex.aget_by_law_article(law_name=law_name, article_number=article_number)
+        return LawArticleDetailResponse(
+            success=True,
+            status="查找成功" if article else "未找到",
+            article=LawArticleResponse(**article) if article else None,
+        )
+    except Exception as e:
+        logging.exception(e)
+        return LawArticleDetailResponse(success=False, status=f"查找失败: {e!s}", article=None)

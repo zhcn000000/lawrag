@@ -141,3 +141,6 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 log_cli = true
 log_cli_level = "INFO"
+markers = [
+    "db: tests that require a running PostgreSQL database",
+]

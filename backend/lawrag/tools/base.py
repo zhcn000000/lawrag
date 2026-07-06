@@ -10,19 +10,22 @@ from exa_py.api import Category, SearchType
 from pydantic_monty import Monty
 from rich.pretty import pretty_repr
 
+from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragmode import RAGMode
 
 rag_mode = RAGMode()
+page_index = LawPageIndex()
 
 
 async def search_documents_base(
     query: str,
-    source_name: str | None = None,
+    law_name: str | None = None,
     page_index: int | None = None,
+    regex: str | None = None,
     offset: int = 0,
 ) -> str:
     source_id: UUID | None = None
-    if source_name:
+    if law_name:
         from lawrag.database.database import DatabaseManager
         from lawrag.database.tables import DocumentSource
 
@@ -31,7 +34,7 @@ async def search_documents_base(
             from sqlalchemy import select as sqla_select
             from sqlmodel import col as scol
 
-            stmt = sqla_select(scol(DocumentSource.id)).where(scol(DocumentSource.name) == source_name)
+            stmt = sqla_select(scol(DocumentSource.id)).where(scol(DocumentSource.name) == law_name)
             result = await session.execute(stmt)
             row = result.first()
             if row:
@@ -42,6 +45,7 @@ async def search_documents_base(
         k=8,
         source_id=source_id,
         page_index=page_index,
+        regex=regex,
         offset=offset,
     )
 
@@ -90,18 +94,52 @@ async def get_document_context_base(document_index: int) -> str:
 
     if not chunks:
         md += "未找到该文档。"
-        return md
+    return md
 
-    for chunk in chunks:
-        cid = chunk["id"]
-        content = chunk["content"]
-        page = chunk.get("page_index")
-        header = f"### 分块 {cid}"
-        if page is not None:
-            header += f" (页码: {page})"
-        md += f"{header}\n"
-        md += f"{content}\n\n"
 
+async def search_law_articles_base(
+    law_name: str,
+    query: str | None = None,
+    article_number: int | None = None,
+    start: int | None = None,
+    end: int | None = None,
+    limit: int = 10,
+) -> str:
+    """在指定法律中查找法条, 支持精确法条号查找和关键词搜索"""
+    if article_number is not None:
+        article = await page_index.aget_by_law_article(law_name=law_name, article_number=article_number)
+        if article is None:
+            return f"未找到法律 '{law_name}' 第{article_number}条"
+        return f"## {law_name} 第{article_number}条\n\n{article['content']}"
+
+    if query:
+        articles = await page_index.asearch_articles(law_name=law_name, query=query, limit=limit)
+    else:
+        articles = await page_index.aget_law_articles(
+            law_name=law_name,
+            start=start,
+            end=end,
+            limit=limit,
+        )
+
+    if not articles:
+        q_desc = query or f"第{start}-{end}条" if start or end else "全部"
+        return f"未在法律 '{law_name}' 中找到匹配 '{q_desc}' 的法条"
+
+    data = []
+    for a in articles:
+        preview = a["content"][:300] + "..." if len(a["content"]) > 300 else a["content"]
+        data.append({
+            "条号": f"第{a['article_number']}条",
+            "内容": preview,
+        })
+
+    title = f"## {law_name}"
+    if query:
+        title += f" 搜索: '{query}'"
+    md = f"{title}\n\n共 {len(articles)} 条结果\n\n"
+    dff = pd.DataFrame(data)
+    md += dff.to_markdown(index=False)
     return md
 
 

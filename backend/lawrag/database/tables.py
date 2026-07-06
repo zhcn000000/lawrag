@@ -195,3 +195,65 @@ class DocumentTable(SQLModel, table=True):
             Index("idx_documents_entities", col(cls.entities), postgresql_using="gin"),
             Index("idx_doc_index", col(cls.document_index), unique=True),
         )
+
+
+class LawArticle(SQLModel, table=True):
+    __tablename__ = "law_articles"
+
+    id: Annotated[
+        UUID,
+        Field(
+            sa_column=Column(
+                Uuid[UUID](native_uuid=True, as_uuid=True),
+                primary_key=True,
+                server_default=func.uuidv7(),
+            ),
+        ),
+    ]
+    source_id: Annotated[
+        UUID | None,
+        Field(
+            sa_column=Column(
+                Uuid[UUID](native_uuid=True, as_uuid=True),
+                Index("idx_law_articles_source"),
+                nullable=True,
+            ),
+        ),
+    ]
+    law_name: Annotated[
+        str,
+        Field(
+            sa_column=Column(
+                String(512),
+                nullable=False,
+                index=True,
+            ),
+        ),
+    ]
+    article_number: Annotated[
+        int,
+        Field(
+            sa_column=Column(Integer, nullable=False),
+        ),
+    ]
+    content: Annotated[str, Field(sa_column=Column(Text, nullable=False))]
+    meta: Annotated[
+        dict,
+        Field(default_factory=dict, sa_column=Column("metadata", JSONB, nullable=False, server_default="{}")),
+    ]
+
+    @declared_attr
+    @classmethod
+    def __table_args__(cls) -> tuple:
+        return (
+            Index(
+                "idx_law_articles_law_name",
+                col(cls.law_name),
+            ),
+            Index(
+                "uq_law_article",
+                col(cls.law_name),
+                col(cls.article_number),
+                unique=True,
+            ),
+        )

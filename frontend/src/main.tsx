@@ -8,7 +8,6 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import ChatPage from "./pages/ChatPage";
 import DashboardPage from "./pages/DashboardPage";
-import DocumentUploadPage from "./pages/DocumentUploadPage";
 import LoginPage from "./pages/LoginPage";
 import { store } from "./store";
 
@@ -44,43 +43,39 @@ const globalStyles = css`
 `;
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem("token");
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
-  return <>{children}</>;
+	const token = localStorage.getItem("token");
+	if (!token) {
+		return <Navigate to="/login" replace />;
+	}
+	return <>{children}</>;
 }
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Root element not found");
 createRoot(rootElement).render(
-  <StrictMode>
-    <Global styles={globalStyles} />
-    <Provider store={store}>
-      <ConfigProvider locale={zhCN}>
-        <AntApp>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route
-                element={
-                  <ProtectedRoute>
-                    <MainLayout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/chat" element={<ChatPage />} />
-                <Route
-                  path="/documents/upload"
-                  element={<DocumentUploadPage />}
-                />
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </BrowserRouter>
-        </AntApp>
-      </ConfigProvider>
-    </Provider>
-  </StrictMode>,
+	<StrictMode>
+		<Global styles={globalStyles} />
+		<Provider store={store}>
+			<ConfigProvider locale={zhCN}>
+				<AntApp>
+					<BrowserRouter>
+						<Routes>
+							<Route path="/login" element={<LoginPage />} />
+							<Route
+								element={
+									<ProtectedRoute>
+										<MainLayout />
+									</ProtectedRoute>
+								}
+							>
+								<Route path="/" element={<DashboardPage />} />
+								<Route path="/chat" element={<ChatPage />} />
+							</Route>
+							<Route path="*" element={<Navigate to="/" replace />} />
+						</Routes>
+					</BrowserRouter>
+				</AntApp>
+			</ConfigProvider>
+		</Provider>
+	</StrictMode>,
 );

@@ -70,3 +70,7 @@ export interface HistoryResponse extends StatusResponse {
 export interface TranscriptionResponse extends StatusResponse {
 	text?: string;
 }
+
+export interface LawListResponse extends StatusResponse {
+	laws?: Record<string, unknown>[];
+}

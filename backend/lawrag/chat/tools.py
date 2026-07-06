@@ -8,7 +8,6 @@ from lawrag.tools.base import (
     crawl_web_base,
     extract_web_base,
     fetch_web_base,
-    get_document_context_base,
     python_repl_base,
     search_documents_base,
     search_law_articles_base,
@@ -44,9 +43,7 @@ async def prepare_web(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> T
     name="search_documents",
     description="""
 根据查询语义搜索法律文档库，返回分页的文档列表。
-如果用户指定了特定法律名称，可以通过`law_name`限制搜索范围。
-如果用户指定了特定页码/条款，可以通过`page_index`精确定位。
-支持`regex`正则表达式过滤文档内容。但是可能的话，优先不使用正则表达式避免性能问题
+支持`regex`正则表达式过滤文档内容。但是可能的话，优先不使用正则表达式避免性能问题。
 返回结果包含文档内容，支持翻页查看更多结果。
 """,
     prepare=prepare_rag,
@@ -54,39 +51,17 @@ async def prepare_web(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> T
 async def search_documents(
     ctx: RunContext[ModelDeps],
     query: Annotated[str, Field(description="搜索查询语句")],
-    law_name: Annotated[str | None, Field(description="可选的法律名称过滤条件，如'中华人民共和国民法典'")] = None,
-    page_index: Annotated[int | None, Field(description="可选的页码/条款索引")] = None,
     regex: Annotated[str | None, Field(description="可选的正则表达式，用于过滤文档内容")] = None,
     offset: Annotated[int, Field(description="分页偏移量,默认0")] = 0,
 ) -> Annotated[str, Field(description="返回markdown格式的搜索结果表格")]:
     try:
         return await search_documents_base(
             query=query,
-            law_name=law_name,
-            page_index=page_index,
             regex=regex,
             offset=offset,
         )
     except Exception as e:
         raise ModelRetry(f"搜索失败: {e!s}") from e
-
-
-@rag_toolset.tool(
-    name="get_document_context",
-    description="""
-获取指定文档的完整分块上下文，支持查看文档的前后分块。
-当一个文档在搜索中被截断时，使用此工具获取该文档的相邻分块以获得更完整的上下文。
-""",
-    prepare=prepare_rag,
-)
-async def get_document_context(
-    ctx: RunContext[ModelDeps],
-    document_index: Annotated[int, Field(description="文档ID,来自搜索结果")],
-) -> Annotated[str, Field(description="返回markdown格式的文档分块上下文")]:
-    try:
-        return await get_document_context_base(document_index=document_index)
-    except Exception as e:
-        raise ModelRetry(f"获取文档上下文失败: {e!s}") from e
 
 
 @rag_toolset.tool(

@@ -81,8 +81,7 @@ CLI 子命令（`lawrag`）：
 - 类型抑制：`# type: ignore` 或 `# type: ignore[error[xxx]]`。
 - Python 3.14 语法：无需 `from __future__ import annotations`，`except` 多个异常可直接用逗号。
 - 启用的 ruff 规则集：`F/E/W/I/N/FAST/PL/UP/NPY/PD/ASYNC/B/C4/FURB/PTH`（开启 preview）。
-- 忽略：`PLR/PLC0415/PLW0603/PLW3201/PLW0717/ASYNC119`。
-- 异步 I/O：禁止阻塞调用（`path.read_text` 等已在源头标注 `noqa: ASYNC240`）。
+- 忽略：`PLR/PLC0415/PLW0603/PLW3201/PLW0717`
 
 ## 测试
 

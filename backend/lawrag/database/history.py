@@ -5,6 +5,7 @@ from uuid import UUID
 import orjson
 from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
 from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy.sql.functions import count
 from sqlmodel import col
 
 from .database import DatabaseManager
@@ -100,7 +101,7 @@ class HistoryStore:
 
     async def acheck_session_exists(self, session_id: UUID) -> bool:
         async with self.__db.asession() as sql_session:
-            stmt = select(func.count()).select_from(SessionTable).where(col(SessionTable.id) == session_id)
+            stmt = select(count()).select_from(SessionTable).where(col(SessionTable.id) == session_id)
             result = await sql_session.execute(stmt)
-            count = result.scalar_one()
-            return count > 0
+            cnt = result.scalar_one()
+            return cnt > 0

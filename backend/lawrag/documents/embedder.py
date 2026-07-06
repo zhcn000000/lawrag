@@ -21,7 +21,7 @@ async def _retry_post(url: str, json: dict, headers: dict, time_out: float = 60.
                 response.raise_for_status()
                 return response.json()
         except HTTPError as exc:
-            if attempt == _MAX_RETRIES or isinstance(exc, HTTPStatusError) and 400 <= exc.response.status_code < 500:
+            if attempt == _MAX_RETRIES or (isinstance(exc, HTTPStatusError) and 400 <= exc.response.status_code < 500):
                 raise
             logging.warning("HTTP 请求失败 (第 %d/%d 次): %s，重试中", attempt, _MAX_RETRIES, exc)
         except Exception:
@@ -40,9 +40,6 @@ def _build_embedding_input(
     for i, d in enumerate(documents):
         text = d.content if isinstance(d, Document) else d
         img_url = image_urls[i] if image_urls and i < len(image_urls) else None
-
-        if not force_text and not img_url and isinstance(d, Document) and d.image_url:
-            img_url = d.image_url
 
         texts.append(text)
         images.append(img_url)
@@ -84,13 +81,6 @@ async def aembed_documents(
 def _build_rerank_document(d: Document | str, force_text: bool = False) -> str | dict:
     if isinstance(d, str):
         return d
-    if not force_text and d.image_url:
-        return {
-            "content": [
-                {"type": "text", "text": d.content},
-                {"type": "image_url", "image_url": {"url": d.image_url}},
-            ],
-        }
     return d.content
 
 

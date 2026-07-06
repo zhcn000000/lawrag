@@ -1,6 +1,5 @@
 from functools import cache
 from typing import Literal
-from uuid import UUID
 
 import httpx
 import pandas as pd
@@ -19,32 +18,12 @@ page_index = LawPageIndex()
 
 async def search_documents_base(
     query: str,
-    law_name: str | None = None,
-    page_index: int | None = None,
     regex: str | None = None,
     offset: int = 0,
 ) -> str:
-    source_id: UUID | None = None
-    if law_name:
-        from lawrag.database.database import DatabaseManager
-        from lawrag.database.tables import DocumentSource
-
-        db = DatabaseManager()
-        async with db.asession() as session:
-            from sqlalchemy import select as sqla_select
-            from sqlmodel import col as scol
-
-            stmt = sqla_select(scol(DocumentSource.id)).where(scol(DocumentSource.name) == law_name)
-            result = await session.execute(stmt)
-            row = result.first()
-            if row:
-                source_id = row[0]
-
     docs = await rag_mode.ahyprid_search(
         query=query,
         k=8,
-        source_id=source_id,
-        page_index=page_index,
         regex=regex,
         offset=offset,
     )
@@ -58,17 +37,12 @@ async def search_documents_base(
         score = doc.query_score if doc.query_score is not None else 0.0
         source = doc.name or "unknown"
         preview = doc.content[:300] + "..." if len(doc.content) > 300 else doc.content
-        row = {
+        data.append({
             "#": offset + i + 1,
             "来源": source,
             "内容预览": preview,
             "相关性%": f"{min(score, 1.0) * 100:.1f}",
-        }
-        if doc.page_index is not None:
-            row["页码"] = str(doc.page_index)
-        if doc.document_index is not None:
-            row["文档ID"] = str(doc.document_index)
-        data.append(row)
+        })
 
     md = "## 搜索结果\n\n"
     md += f"查询: {query}\n"
@@ -79,21 +53,7 @@ async def search_documents_base(
     dff = pd.DataFrame(data)
     md += dff.to_markdown(index=False)
     md += f"\n\n> 提示: 使用 `offset={offset + len(docs)}` 翻页查看更多结果。"
-    md += "\n> 使用 `get_document_context` 通过文档ID获取完整文档上下文。"
 
-    return md
-
-
-async def get_document_context_base(document_index: int) -> str:
-    context = await rag_mode.aget_document_context(document_index=document_index)
-
-    chunks = context["chunks"]
-    doc_id = context["document_index"]
-
-    md = f"## 文档上下文 (ID: {doc_id})\n\n"
-
-    if not chunks:
-        md += "未找到该文档。"
     return md
 
 
@@ -105,7 +65,6 @@ async def search_law_articles_base(
     end: int | None = None,
     limit: int = 10,
 ) -> str:
-    """在指定法律中查找法条, 支持精确法条号查找和关键词搜索"""
     if article_number is not None:
         article = await page_index.aget_by_law_article(law_name=law_name, article_number=article_number)
         if article is None:

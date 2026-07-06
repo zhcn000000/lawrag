@@ -54,9 +54,4 @@ async def asplit_document(
         yield Document(
             content=chunk,
             name=document.name,
-            link=document.link,
-            metadata=document.metadata,
-            entities=document.entities,
-            page_index=document.page_index,
-            image_url=document.image_url,
         )

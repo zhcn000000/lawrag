@@ -118,6 +118,7 @@ def _resolve_user_content(
     return text.strip(), files or None
 
 
+# ruff: noqa: ASYNC119
 @router.post("/{session_id}/stream")
 async def api_chat(
     session_id: UUID,

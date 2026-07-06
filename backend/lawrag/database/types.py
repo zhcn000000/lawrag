@@ -28,7 +28,7 @@ class BM25Dumper(Dumper):
     @classmethod
     def build(cls, oid: int) -> type[BM25Dumper]:
         cls_copy: type[BM25Dumper] = typing_cast(
-            type[BM25Dumper],
+            "type[BM25Dumper]",
             type(cls.__name__, (cls,), {}),  # type: ignore
         )
         cls_copy.oid = oid

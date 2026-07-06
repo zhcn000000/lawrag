@@ -1,12 +1,13 @@
-"""
-pageindex 测试 (需要运行中的 PostgreSQL 数据库)
+"""pageindex 测试 (需要运行中的 PostgreSQL 数据库)
 使用标记: pytest -m "not db" 跳过数据库测试, pytest -m "db" 仅运行数据库测试
 """
 
-import pathlib
-import tempfile
-
 import pytest
+from anyio import NamedTemporaryFile as AsyncNamedTemporaryFile
+from anyio import Path as AsyncPath
+from anyio import TemporaryDirectory as AsyncTemporaryDirectory
+
+from lawrag.database.pageindex import LawPageIndex
 
 TEST_TXT_CONTENT = (
     "《中华人民共和国测试法》第一条规定，为了保护测试主体的合法权益，根据宪法，制定本法。\n"
@@ -18,22 +19,20 @@ TEST_TXT_CONTENT = (
 
 
 @pytest.fixture
-def test_law_file() -> pathlib.Path:
+async def test_law_file() -> AsyncPath:
     """创建临时测试法条文件"""
-    with tempfile.NamedTemporaryFile(
+    async with AsyncNamedTemporaryFile(
         mode="w",
         suffix=".txt",
         delete=False,
         encoding="utf-8",
     ) as f:
-        f.write(TEST_TXT_CONTENT)
-        return pathlib.Path(f.name)
+        await f.write(TEST_TXT_CONTENT)
+        return AsyncPath(f.wrapped.name)
 
 
 @pytest.mark.db
-@pytest.mark.anyio
-async def test_import_and_retrieve(test_law_file: pathlib.Path) -> None:
-    from lawrag.database.pageindex import LawPageIndex
+async def test_import_and_retrieve(test_law_file: AsyncPath) -> None:
 
     pageindex = LawPageIndex()
 
@@ -81,27 +80,25 @@ async def test_import_and_retrieve(test_law_file: pathlib.Path) -> None:
     laws2_dict = {entry["law_name"]: entry for entry in laws2}
     assert "中华人民共和国测试法" not in laws2_dict
 
-    test_law_file.unlink(missing_ok=True)  # noqa: ASYNC240
+    await test_law_file.unlink(missing_ok=True)
 
 
 @pytest.mark.db
-@pytest.mark.anyio
 async def test_import_dir() -> None:
     """测试批量导入目录"""
-    from lawrag.database.pageindex import LawPageIndex
 
     pageindex = LawPageIndex()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
+    async with AsyncTemporaryDirectory() as tmpdir:
         # Create test files
-        tmp_dir = pathlib.Path(tmpdir)
+        tmp_dir = AsyncPath(tmpdir)
         file1 = tmp_dir / "测试法A.txt"
         file2 = tmp_dir / "测试法B.txt"
-        file1.write_text(
+        await file1.write_text(
             "《中华人民共和国测试法A》第一条规定，测试A第一条。\n《中华人民共和国测试法A》第二条规定，测试A第二条。\n",
             encoding="utf-8",
         )
-        file2.write_text(
+        await file2.write_text(
             "《中华人民共和国测试法B》第一条规定，测试B第一条。\n",
             encoding="utf-8",
         )

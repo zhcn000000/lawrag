@@ -186,6 +186,7 @@ def parse_content(content: str, law_name_override: str | None = None) -> list[tu
 
     Returns:
         [(law_name, article_number, content), ...]
+
     """
     # 检测是否是宪法格式 (开头有标题信息和目录)
     if content.strip().startswith("中华人民共和国宪法"):

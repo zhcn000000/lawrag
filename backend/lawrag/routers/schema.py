@@ -36,8 +36,6 @@ class UpdateUserRequest(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     regex: str | None = None
-    source_id: str | None = None
-    page_index: int | None = None
     offset: int = 0
     k: int = 4
 
@@ -48,16 +46,6 @@ class SearchResponse(StatusResponse):
 
 class DocumentUploadResponse(StatusResponse):
     doc_ids: list[str]
-
-
-class SourceInfo(BaseModel):
-    id: str
-    name: str
-    category: str | None = None
-
-
-class SourceListResponse(StatusResponse):
-    sources: list[SourceInfo] = []
 
 
 class ToolItem(BaseModel):

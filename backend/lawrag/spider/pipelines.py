@@ -34,11 +34,11 @@ class ContentDownloadPipeline:
         pipeline.structured_dir = Path(
             settings.get("LAW_CONTENT_STRUCTURED_DIR", env_settings.DATA_ROOT / "data" / "structured_laws")
         )
+        return pipeline
 
     def process_item(self, item: LawDownloadItem) -> LawDownloadItem:
         assert self.download_dir is not None, "download_dir must be set"
         assert self.structured_dir is not None, "structured_dir must be set"
-
         self.download_dir.mkdir(parents=True, exist_ok=True)
         self.structured_dir.mkdir(parents=True, exist_ok=True)
 

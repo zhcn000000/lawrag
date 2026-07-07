@@ -27,6 +27,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "RETRY_ENABLED": True,
     "RETRY_TIMES": 3,
     "DOWNLOAD_TIMEOUT": 30,
+    "USER_AGENT": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0",
     "DEFAULT_REQUEST_HEADERS": {
         "Accept": "application/json, text/javascript, */*; q=0.01",
         "Accept-Language": "zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2",
@@ -47,6 +49,11 @@ LAW_INDEX_SETTINGS.update({
     "ITEM_PIPELINES": {
         "lawrag.spider.pipelines.LawIndexPipeline": 300,
     },
+})
+
+LAW_INDEX_SETTINGS["DEFAULT_REQUEST_HEADERS"].update({
+    "Content-Type": "application/json;charset=UTF-8",
+    "X-Requested-With": "XMLHttpRequest",
 })
 
 CONTENT_DOWNLOAD_SETTINGS: dict[str, Any] = DEFAULT_SETTINGS.copy()

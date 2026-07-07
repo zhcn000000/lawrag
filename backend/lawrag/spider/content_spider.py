@@ -26,13 +26,6 @@ logger = logging.getLogger(__name__)
 
 DOWNLOAD_API = "https://flk.npc.gov.cn/law-search/download/pc"
 
-API_HEADERS = {
-    "Content-Type": "application/json;charset=UTF-8",
-    "Accept": "application/json, text/javascript, */*; q=0.01",
-    "X-Requested-With": "XMLHttpRequest",
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:136.0) Gecko/20100101 Firefox/136.0",
-}
-
 
 class ContentDownloadSpider(Spider):
     """Spider that downloads law documents via the NPC signed-URL API.
@@ -88,7 +81,6 @@ class ContentDownloadSpider(Spider):
             yield Request(
                 url=url,
                 method="GET",
-                headers=API_HEADERS,
                 callback=self.parse_signed_url,
                 meta={"bbbs": bbbs, "law_name": law_name},
                 dont_filter=True,
@@ -121,6 +113,7 @@ class ContentDownloadSpider(Spider):
         yield Request(
             url=signed_url,
             method="GET",
+            priority=1,
             callback=self.parse_document,
             meta={**response.meta, "filename": filename},
             dont_filter=True,

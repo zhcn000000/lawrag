@@ -412,8 +412,12 @@ def parse_multi_level(content: str) -> dict:
             continue
 
         if art_m:
+            art_num = cn_to_int(art_m.group(1))
+            if article_number is not None and art_num <= article_number:
+                article_buffer.append(stripped)
+                continue
             _flush_article()
-            article_number = cn_to_int(art_m.group(1))
+            article_number = art_num
             first_part = art_m.group(2)
             if first_part:
                 article_buffer.append(first_part)

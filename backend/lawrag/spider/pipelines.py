@@ -3,12 +3,10 @@
 import json
 import logging
 import pathlib
-from typing import TYPE_CHECKING
+
+from scrapy import Spider
 
 from lawrag.spider.items import LawIndexItem
-
-if TYPE_CHECKING:
-    from scrapy import Spider
 
 logger = logging.getLogger(__name__)
 

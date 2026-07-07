@@ -192,7 +192,7 @@ async def spider_crawl(
     category: Annotated[
         Literal["flfg", "xzfg", "sfjs", "all"],
         Option("--category", "-c", help="Law category to crawl (skip dfxfg/locals)"),
-    ] = "all",
+    ] = "flfg",
     output: Annotated[str | None, Option("--output", "-o", help="Output JSON path for law index")] = None,
 ) -> None:
     """Stage 1: Crawl the NPC law database API to build a law index.

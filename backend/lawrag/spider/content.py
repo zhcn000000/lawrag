@@ -1,12 +1,12 @@
 """Content downloader and multi-level parser for national laws.
 
-Downloads law documents from the NPC database and parses them into
-structured format preserving chapter/section/article hierarchy.
+Downloads law documents from the NPC database via the /download/pc API
+and parses them into structured format preserving chapter/section/article hierarchy.
 
 Workflow:
-  1. Read law index JSON (from LawIndexSpider)
-  2. For each law, use Selenium to extract download URL from detail page
-  3. Download the document (docx or html)
+  1. Read law index JSON (from LawIndexSpider), must include bbbs field
+  2. For each law, call /download/pc API to get a signed OBS download URL
+  3. Download the docx from the signed URL
   4. Convert to text and parse multi-level structure
   5. Save as structured text files
 """
@@ -28,60 +28,63 @@ from lawrag.utils.environments import settings
 
 logger = logging.getLogger(__name__)
 
-NPC_API_URL = "https://flk.npc.gov.cn/api/"
-DETAIL_BASE = "https://flk.npc.gov.cn"
-DOC_BASE = "https://wb.flk.npc.gov.cn"
+API_BASE = "https://flk.npc.gov.cn"
+DOWNLOAD_API = f"{API_BASE}/law-search/download/pc"
+
+API_HEADERS = {
+    "Content-Type": "application/json;charset=UTF-8",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "X-Requested-With": "XMLHttpRequest",
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:136.0) Gecko/20100101 Firefox/136.0",
+}
 
 DEFAULT_DOWNLOAD_DIR = settings.DATA_ROOT / "downloaded_laws"
 DEFAULT_STRUCTURED_DIR = settings.DATA_ROOT / "structured_laws"
-
-
-def build_detail_url(raw_url: str) -> str:
-    if raw_url.startswith("http"):
-        return raw_url
-    return DETAIL_BASE + raw_url if raw_url.startswith("/") else f"{DETAIL_BASE}/{raw_url}"
+DEFAULT_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+DEFAULT_STRUCTURED_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class LawContentDownloader:
-    """Downloads law documents using Selenium and converts them to text."""
+    """Downloads law documents via the NPC API and converts them to text."""
 
-    def __init__(self, download_dir: PathLike | str = DEFAULT_DOWNLOAD_DIR) -> None:
-        self._download_dir = Path(download_dir)
+    def __init__(self, download_dir: PathLike | str | None = None) -> None:
+        self._download_dir = Path(download_dir) if download_dir is not None else DEFAULT_DOWNLOAD_DIR
         self._download_dir.mkdir(parents=True, exist_ok=True)
         self._md = MarkItDown()
+        self._client: httpx.AsyncClient | None = None
 
-    async def extract_doc_url_httpx(self, detail_url: str) -> str | None:
-        """Attempt to extract document URL"""
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=30, headers=API_HEADERS)
+        return self._client
 
+    async def close(self) -> None:
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+    async def get_signed_download_url(self, bbbs: str) -> str | None:
+        """Call /download/pc to get a signed OBS download URL for the docx file."""
+        client = await self._get_client()
         try:
-            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-                resp = await client.get(detail_url)
-                resp.raise_for_status()
-                html = resp.text
-
-            docx_match = re.search(r'https?://wb\.flk\.npc\.gov\.cn/[^"\s]+\.docx?', html)
-            if docx_match:
-                return docx_match.group(0)
-
-            word_match = re.search(r'https?://wb\.flk\.npc\.gov\.cn/[^"\s]+/WORD/[^"\s]+', html)
-            if word_match:
-                return word_match.group(0)
-
+            resp = await client.get(DOWNLOAD_API, params={"format": "docx", "bbbs": bbbs})
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("code") == 200 and data.get("data"):
+                return data["data"].get("url")
+            logger.warning("Download API returned unexpected data for %s: %s", bbbs, data)
             return None
         except Exception:
-            logger.exception("Failed to fetch %s", detail_url)
+            logger.exception("Failed to get download URL for bbbs=%s", bbbs)
             return None
 
     async def download_document(self, url: str, law_name: str) -> AsyncPath | None:
-        """Download a law document from NPC database."""
+        """Download a law document from the signed OBS URL."""
         parsed = urlparse(url)
         filename = unquote(Path(parsed.path).name)
         if not filename or "." not in filename:
             safe_name = re.sub(r"[^\w\-]", "_", law_name)
-            if "texthtml" in url:
-                filename = f"{safe_name}.html"
-            else:
-                filename = f"{safe_name}.docx"
+            filename = f"{safe_name}.docx"
 
         output_path = AsyncPath(self._download_dir / filename)
 
@@ -90,12 +93,12 @@ class LawContentDownloader:
             return output_path
 
         try:
-            async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
-                resp = await client.get(url)
-                resp.raise_for_status()
-                await output_path.write_bytes(resp.content)
-                logger.info("Downloaded: %s -> %s", law_name, output_path)
-                return output_path
+            client = await self._get_client()
+            resp = await client.get(url, timeout=60)
+            resp.raise_for_status()
+            await output_path.write_bytes(resp.content)
+            logger.info("Downloaded: %s -> %s", law_name, output_path)
+            return output_path
         except Exception:
             logger.exception("Failed to download %s from %s", law_name, url)
             return None
@@ -116,7 +119,6 @@ class LawContentDownloader:
         law_entry: dict,
         *,
         structured_dir: PathLike | str = DEFAULT_STRUCTURED_DIR,
-        doc_url: str | None = None,
     ) -> str | None:
         """Download a law and parse it into structured text.
 
@@ -124,16 +126,18 @@ class LawContentDownloader:
         """
         output_dir = AsyncPath(structured_dir)
         law_name = law_entry.get("law_name", "")
-        detail_url = law_entry.get("detail_url", "")
+        bbbs = law_entry.get("bbbs", "")
 
-        if not doc_url and detail_url:
-            doc_url = await self.extract_doc_url_httpx(detail_url)
-
-        if not doc_url:
-            logger.warning("No download URL for %s", law_name)
+        if not bbbs:
+            logger.warning("No bbbs for %s, skipping", law_name)
             return None
 
-        doc_path = await self.download_document(doc_url, law_name)
+        signed_url = await self.get_signed_download_url(bbbs)
+        if not signed_url:
+            logger.warning("No download URL for %s", law_name)
+            return None
+        logger.debug("Downloading %s from %s", law_name, signed_url)
+        doc_path = await self.download_document(signed_url, law_name)
         if not doc_path:
             return None
 
@@ -142,7 +146,7 @@ class LawContentDownloader:
             return None
 
         parsed = parse_multi_level(text)
-        if not parsed or not parsed.get("articles") and not parsed.get("preamble"):
+        if not parsed or not parsed.get("articles") and not parsed.get("chapters") and not parsed.get("preamble"):
             logger.warning("Failed to parse %s", law_name)
             return None
 
@@ -158,11 +162,12 @@ class LawContentDownloader:
         self,
         index_path: PathLike | str,
         *,
-        structured_dir: PathLike | str = DEFAULT_STRUCTURED_DIR,
+        structured_dir: PathLike | str | None = None,
         category: str | None = None,
     ) -> list[dict]:
         """Process a law index JSON file, downloading and parsing each law."""
-
+        if structured_dir is None:
+            structured_dir = DEFAULT_STRUCTURED_DIR
         idx_path = AsyncPath(index_path)
         if not await idx_path.exists():
             raise FileNotFoundError(f"Index file not found: {idx_path}")
@@ -175,6 +180,10 @@ class LawContentDownloader:
 
         for i, entry in enumerate(law_list):
             if category and entry.get("category") != category:
+                continue
+            if entry.get("status") != "有效":
+                continue
+            if entry.get("law_type") != "法律":
                 continue
 
             try:
@@ -208,8 +217,8 @@ class LawContentDownloader:
 async def run_content_download(
     index_path: PathLike | str,
     *,
-    structured_dir: PathLike | str = DEFAULT_STRUCTURED_DIR,
-    download_dir: PathLike | str = DEFAULT_DOWNLOAD_DIR,
+    structured_dir: PathLike | str | None = None,
+    download_dir: PathLike | str | None = None,
     category: str | None = None,
 ) -> list[dict]:
     """CLI entry point for content download.
@@ -217,9 +226,17 @@ async def run_content_download(
     Usage:
         await run_content_download("data/law_index_flfg.json")
     """
+    if structured_dir is None:
+        structured_dir = DEFAULT_STRUCTURED_DIR
+    if download_dir is None:
+        download_dir = DEFAULT_DOWNLOAD_DIR
+
     downloader = LawContentDownloader(download_dir=download_dir)
-    return await downloader.process_index(
-        index_path=index_path,
-        structured_dir=structured_dir,
-        category=category,
-    )
+    try:
+        return await downloader.process_index(
+            index_path=index_path,
+            structured_dir=structured_dir,
+            category=category,
+        )
+    finally:
+        await downloader.close()

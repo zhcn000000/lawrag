@@ -1,4 +1,4 @@
-"""Async law spider runner using Scrapy's native asyncio support (AsyncCrawlerProcess).
+"""Async law spider runner using Scrapy's native asyncio support (AsyncCrawlerRunner).
 
 Uses TWISTED_REACTOR_ENABLED=False for pure asyncio mode without a Twisted reactor.
 """
@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from scrapy.crawler import AsyncCrawlerProcess
+from scrapy.crawler import AsyncCrawlerRunner
 
 from lawrag.spider.law_spider import LawIndexSpider
 
@@ -42,7 +42,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 async def run_law_index_spider(
     *,
     category: str = "all",
-    output: str | None = None,
+    output: Path | None = None,
     extra_settings: dict[str, Any] | None = None,
 ) -> None:
     settings = DEFAULT_SETTINGS.copy()
@@ -50,10 +50,9 @@ async def run_law_index_spider(
         settings.update(extra_settings)
 
     if output:
-        output_path = Path(output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output.parent.mkdir(parents=True, exist_ok=True)
         settings["FEEDS"] = {
-            str(output_path): {
+            str(output): {
                 "format": "json",
                 "encoding": "utf-8",
                 "ensure_ascii": False,
@@ -61,5 +60,5 @@ async def run_law_index_spider(
             },
         }
 
-    process = AsyncCrawlerProcess(settings, install_root_handler=False)
-    await process.crawl(LawIndexSpider, category=category)
+    runner = AsyncCrawlerRunner(settings)
+    await runner.crawl(LawIndexSpider, category=category)

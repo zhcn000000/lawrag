@@ -16,35 +16,51 @@ from scrapy import Request, Spider
 from lawrag.spider.items import LawIndexItem
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import AsyncIterator, Generator
 
     from scrapy.http.response import Response
 
 logger = logging.getLogger(__name__)
 
-NPC_API_URL = "https://flk.npc.gov.cn/api/"
+SEARCH_API_URL = "https://flk.npc.gov.cn/law-search/search/list"
 DETAIL_BASE_URL = "https://flk.npc.gov.cn"
+
+CATEGORY_CODE_MAP = {
+    "flfg": [101],  # 法律
+    "xzfg": [201],  # 行政法规
+    "sfjs": [311],  # 司法解释
+}
 
 NATIONAL_CATEGORIES = ("flfg", "xzfg", "sfjs")
 
 STATUS_MAP = {
-    "1": "有效",
-    "3": "尚未生效",
-    "5": "已修改",
-    "7": "有效",
-    "9": "已废止",
+    1: "已废止",
+    2: "已修改",
+    3: "有效",
+    4: "尚未生效",
+}
+
+JSON_HEADERS = {
+    "Content-Type": "application/json;charset=UTF-8",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "X-Requested-With": "XMLHttpRequest",
 }
 
 
-def _build_api_url(page: int, category: str) -> str:
-    return (
-        f"{NPC_API_URL}?page={page}"
-        f"&type={category}"
-        f"&searchType=title%3Bvague"
-        f"&sortTr=f_bbrq_s%3Bdesc"
-        f"&gbrqStart=&gbrqEnd=&sxrqStart=&sxrqEnd="
-        f"&sort=true&size=10"
-    )
+def _build_search_body(page_no: int, page_size: int, flfg_code_ids: list[int]) -> dict[str, Any]:
+    return {
+        "pageNo": page_no,
+        "pageSize": page_size,
+        "searchRange": 1,
+        "searchType": 2,
+        "searchContent": "",
+        "sxrq": [],
+        "gbrq": [],
+        "sxx": [],
+        "flfgCodeId": flfg_code_ids,
+        "zdjgCodeId": [],
+        "xgzlSearch": False,
+    }
 
 
 class LawIndexSpider(Spider):
@@ -70,37 +86,45 @@ class LawIndexSpider(Spider):
         self._index_counter: dict[str, int] = {}
         self._total_items: dict[str, int] = {}
 
-    def start_requests(self) -> Generator[Request]:
+    async def start(self) -> "AsyncIterator[Request]":
         logger.info("Starting law index crawl for categories: %s", self._categories)
         for cat in self._categories:
+            code_ids = CATEGORY_CODE_MAP[cat]
+            body = _build_search_body(page_no=1, page_size=10, flfg_code_ids=code_ids)
             yield Request(
-                url=_build_api_url(page=1, category=cat),
+                url=SEARCH_API_URL,
+                method="POST",
+                body=json.dumps(body),
+                headers=JSON_HEADERS,
                 callback=self.parse_api_first_page,
-                meta={"category": cat},
+                meta={"category": cat, "code_ids": code_ids},
                 dont_filter=True,
             )
 
     def parse_api_first_page(self, response: Response) -> Generator[Request | LawIndexItem | None]:
         cat = response.meta["category"]
+        code_ids = response.meta["code_ids"]
         try:
             data = json.loads(response.text)
         except json.JSONDecodeError:
             logger.exception("Failed to parse JSON for %s page 1", cat)
             return
 
-        result = data.get("result", {})
-        total_count = int(result.get("totalSizes", 0))
-        total_pages = int(result.get("totalPage", 0))
-        total_pages = total_pages if total_pages > 0 else (total_count // 10 + (1 if total_count % 10 else 0))
+        total_count = int(data.get("total", 0))
+        total_pages = total_count // 10 + (1 if total_count % 10 else 0)
 
         self._total_items[cat] = total_count
         logger.info("Category '%s': %d total items, %d pages", cat, total_count, total_pages)
 
         yield from self._parse_page_items(response, cat, 1)
 
-        for page in range(2, total_pages + 1):
+        for page in range(2, min(total_pages + 1, 101)):  # max 100 pages = 1000 items
+            body = _build_search_body(page_no=page, page_size=10, flfg_code_ids=code_ids)
             yield Request(
-                url=_build_api_url(page=page, category=cat),
+                url=SEARCH_API_URL,
+                method="POST",
+                body=json.dumps(body),
+                headers=JSON_HEADERS,
                 callback=self._parse_page_items,
                 meta={"category": cat, "page": page},
                 dont_filter=True,
@@ -121,28 +145,25 @@ class LawIndexSpider(Spider):
             logger.exception("JSON decode error for %s page %d", cat, page)
             return
 
-        law_list = data.get("result", {}).get("data", [])
+        law_list = data.get("rows", [])
         if not law_list:
             logger.warning("Empty data for %s page %d", cat, page)
             return
 
         for idx, entry in enumerate(law_list):
             index_num = (page - 1) * 10 + idx + 1
-            status_raw = str(entry.get("status", ""))
-
-            raw_url = entry.get("url", "")
-            detail_url = raw_url
-            if raw_url and not raw_url.startswith("http"):
-                detail_url = DETAIL_BASE_URL + raw_url if raw_url.startswith("/") else f"{DETAIL_BASE_URL}/{raw_url}"
+            sxx = entry.get("sxx")
+            status = STATUS_MAP.get(sxx, str(sxx) if sxx is not None else "")
+            bbbs = entry.get("bbbs", "")
 
             yield LawIndexItem(
                 law_name=entry.get("title", ""),
-                office=entry.get("office", ""),
-                publish_date=entry.get("publish", ""),
-                expiry_date=entry.get("expiry", ""),
-                law_type=entry.get("type", ""),
-                status=STATUS_MAP.get(status_raw, status_raw),
-                detail_url=detail_url,
+                office=entry.get("zdjgName", ""),
+                publish_date=entry.get("gbrq", ""),
+                expiry_date=entry.get("sxrq", ""),
+                law_type=entry.get("flxz", ""),
+                status=status,
+                detail_url=f"{DETAIL_BASE_URL}/detail2.html?{bbbs}" if bbbs else "",
                 category=cat,
                 index_number=str(index_num),
             )

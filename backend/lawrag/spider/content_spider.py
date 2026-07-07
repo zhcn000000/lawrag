@@ -57,13 +57,16 @@ class ContentDownloadSpider(Spider):
         content = await idx.read_text(encoding="utf-8")
         law_list: list[dict] = json.loads(content)
         logger.info("Loaded %d laws from index: %s", len(law_list), self._index_path)
-
+        current_files = {f.stem async for f in AsyncPath(self.settings.get("LAW_CONTENT_STRUCTURED_DIR")).iterdir()}
         for entry in law_list:
             if self._category and entry.get("category") != self._category:
                 continue
             if entry.get("status") != "有效":
                 continue
             if entry.get("law_type") not in {"法律", "宪法", "行政法规", "监察法规"}:
+                continue
+            if entry.get("law_name") in current_files:
+                logger.debug("Skipping already downloaded: %s", entry.get("law_name"))
                 continue
 
             bbbs = entry.get("law_id", "") or entry.get("bbbs", "")

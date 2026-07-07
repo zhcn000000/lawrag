@@ -98,8 +98,8 @@ async def run_content_download(
     """
     settings = CONTENT_DOWNLOAD_SETTINGS.copy()
 
-    download_path = Path(download_dir or env_settings.DATA_ROOT / "data" / "downloaded_laws")
-    structured_path = Path(structured_dir or env_settings.DATA_ROOT / "data" / "structured_laws")
+    download_path = Path(download_dir or env_settings.DATA_ROOT / "downloaded_laws")
+    structured_path = Path(structured_dir or env_settings.DATA_ROOT / "structured_laws")
 
     manifest_path = download_path / ".manifest.json"
     settings["LAW_CONTENT_DOWNLOAD_DIR"] = download_path

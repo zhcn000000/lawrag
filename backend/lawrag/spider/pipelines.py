@@ -29,10 +29,10 @@ class ContentDownloadPipeline:
         pipeline = cls()
         settings = crawler.settings
         pipeline.download_dir = Path(
-            settings.get("LAW_CONTENT_DOWNLOAD_DIR", env_settings.DATA_ROOT / "data" / "downloaded_laws")
+            settings.get("LAW_CONTENT_DOWNLOAD_DIR", env_settings.DATA_ROOT / "downloaded_laws")
         )
         pipeline.structured_dir = Path(
-            settings.get("LAW_CONTENT_STRUCTURED_DIR", env_settings.DATA_ROOT / "data" / "structured_laws")
+            settings.get("LAW_CONTENT_STRUCTURED_DIR", env_settings.DATA_ROOT / "structured_laws")
         )
         return pipeline
 

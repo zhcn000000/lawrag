@@ -38,6 +38,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "TWISTED_REACTOR_ENABLED": False,
 }
 
+DEFAULT_OUTPUT = Path("data/law_index/law_index.json")
+
 
 async def run_law_index_spider(
     *,
@@ -49,16 +51,9 @@ async def run_law_index_spider(
     if extra_settings:
         settings.update(extra_settings)
 
-    if output:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        settings["FEEDS"] = {
-            str(output): {
-                "format": "json",
-                "encoding": "utf-8",
-                "ensure_ascii": False,
-                "overwrite": True,
-            },
-        }
+    output_path = output or DEFAULT_OUTPUT
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    settings["LAW_INDEX_PATH"] = str(output_path)
 
     runner = AsyncCrawlerRunner(settings)
     await runner.crawl(LawIndexSpider, category=category)

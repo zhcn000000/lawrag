@@ -6,6 +6,7 @@ from scrapy.item import Field, Item
 class LawIndexItem(Item):
     """A law entry from the NPC API index."""
 
+    law_id: Field = Field()
     law_name: Field = Field()
     office: Field = Field()
     publish_date: Field = Field()

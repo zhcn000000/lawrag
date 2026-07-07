@@ -126,7 +126,7 @@ class LawContentDownloader:
         """
         output_dir = AsyncPath(structured_dir)
         law_name = law_entry.get("law_name", "")
-        bbbs = law_entry.get("bbbs", "")
+        bbbs = law_entry.get("law_id", "") or law_entry.get("bbbs", "")
 
         if not bbbs:
             logger.warning("No bbbs for %s, skipping", law_name)

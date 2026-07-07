@@ -190,35 +190,42 @@ spider_cmd = Typer(pretty_exceptions_enable=False, help="法律爬虫命令")
 @runnify
 async def spider_crawl(
     category: Annotated[
-        Literal["flfg", "xzfg", "sfjs", "all"],
-        Option("--category", "-c", help="Law category to crawl (skip dfxfg/locals)"),
-    ] = "flfg",
-    output: Annotated[str | None, Option("--output", "-o", help="Output JSON path for law index")] = None,
+        Literal["xf", "flfg", "xzfg", "jcfg", "sfjs", "dfxfg", "all"],
+        Option("--category", "-c", help="Law category to crawl"),
+    ] = "all",
+    output: Annotated[
+        Path | None, Option("--output", "-o", help="Output JSON path (default: data/law_index/law_index.json)")
+    ] = None,
 ) -> None:
     """Stage 1: Crawl the NPC law database API to build a law index.
 
     This only discovers laws; use 'spider download' to download and parse content.
-    Categories: flfg (法律), xzfg (行政法规), sfjs (司法解释).
+    Categories: xf (宪法), flfg (法律), xzfg (行政法规), jcfg (监察法规), sfjs (司法解释).
+    Use dfxfg for 地方性法规 (excluded from 'all').
     """
+    from pathlib import Path
+
     from lawrag.spider.runner import run_law_index_spider
 
     logger.info("Running law index spider for category: %s", category)
-    await run_law_index_spider(category=category, output=output)
+    out_path = Path(output) if output else None
+    await run_law_index_spider(category=category, output=out_path)
     logger.info("Law index crawl completed.")
 
 
 @spider_cmd.command("download")
 @runnify
 async def spider_download(
-    index_path: Annotated[str, Argument(help="Path to law index JSON file from 'lawrag spider crawl'")],
+    index_path: Annotated[Path | None, Argument(help="Path to law index JSON file from 'lawrag spider crawl'")] = None,
     output_dir: Annotated[
-        str | None, Option("--output-dir", "-o", help="Output directory for structured law files")
+        Path | None, Option("--output-dir", "-o", help="Output directory for structured law files")
     ] = None,
     download_dir: Annotated[
-        str | None, Option("--download-dir", "-d", help="Directory for raw downloaded docx files")
+        Path | None, Option("--download-dir", "-d", help="Directory for raw downloaded docx files")
     ] = None,
     category: Annotated[
-        Literal["flfg", "xzfg", "sfjs"] | None, Option("--category", "-c", help="Filter by category")
+        Literal["xf", "flfg", "xzfg", "jcfg", "sfjs", "dfxfg", "all"] | None,
+        Option("--category", "-c", help="Filter by category"),
     ] = None,
 ) -> None:
     """Stage 2+3: Download and parse law content from previously crawled index.
@@ -228,13 +235,16 @@ async def spider_download(
     """
     from lawrag.spider.content import LawContentDownloader
 
-    dl_dir = Path(download_dir) if download_dir else Path("data/raw_laws")
-    out_dir = Path(output_dir) if output_dir else Path("data/structured_laws")
+    if index_path is None:
+        index_path = settings.DATA_ROOT / "law_index" / "law_index.json"
 
-    downloader = LawContentDownloader(download_dir=dl_dir)
+    if category == "all":
+        category = None  # 'all' means no filtering
+
+    downloader = LawContentDownloader(download_dir=download_dir)
     results = await downloader.process_index(
         index_path=index_path,
-        structured_dir=out_dir,
+        structured_dir=output_dir,
         category=category,
     )
     ok = sum(1 for r in results if r["status"] == "ok")

@@ -2,7 +2,7 @@
 
 import json
 import logging
-import pathlib
+from pathlib import Path
 
 from scrapy import Spider
 
@@ -12,18 +12,15 @@ logger = logging.getLogger(__name__)
 
 
 class LawIndexPipeline:
-    """Pipeline that collects law index items and exports them."""
+    """Pipeline that collects law index items and incrementally upserts to a single JSON file."""
 
     def __init__(self) -> None:
-        self._items: dict[str, list[dict]] = {}
+        self._items: dict[str, dict] = {}
 
     def process_item(self, item: LawIndexItem, spider: Spider) -> LawIndexItem:
-        cat = item.get("category", "unknown")
-        if cat not in self._items:
-            self._items[cat] = []
-
-        self._items[cat].append({
-            "index_number": item.get("index_number", ""),
+        law_id = item.get("law_id", "")
+        entry = {
+            "law_id": law_id,
             "law_name": item.get("law_name", ""),
             "office": item.get("office", ""),
             "publish_date": item.get("publish_date", ""),
@@ -32,21 +29,48 @@ class LawIndexPipeline:
             "status": item.get("status", ""),
             "detail_url": item.get("detail_url", ""),
             "category": item.get("category", ""),
-        })
+            "index_number": item.get("index_number", ""),
+        }
+        if law_id:
+            self._items[law_id] = entry
         return item
 
     def close_spider(self, spider: Spider) -> None:
         if not self._items:
             return
 
-        for cat, items in self._items.items():
-            total = len(items)
-            logger.info("LawIndexPipeline: collected %d items for category '%s'", total, cat)
+        output_path = spider.crawler.settings.get(
+            "LAW_INDEX_PATH",
+            "data/law_index/law_index.json",
+        )
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
 
-            if hasattr(spider, "crawler"):
-                feed_uri = spider.crawler.settings.get("LAW_INDEX_OUTPUT")
-                if feed_uri:
-                    output_path = feed_uri.replace("{category}", cat)
-                    with pathlib.Path(output_path).open("w", encoding="utf-8") as f:
-                        json.dump(items, f, ensure_ascii=False, indent=2)
-                    logger.info("Exported %d laws for '%s' to %s", total, cat, output_path)
+        existing: dict[str, dict] = {}
+        if output_file.exists():
+            try:
+                with output_file.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
+                for entry in data:
+                    lid = entry.get("law_id", "")
+                    if lid:
+                        existing[lid] = entry
+                logger.info("Loaded %d existing entries from %s", len(existing), output_file)
+            except json.JSONDecodeError, OSError:
+                logger.warning("Could not read existing %s, starting fresh", output_file)
+
+        merged = {**existing, **self._items}
+        new_count = len(self._items)
+        updated_count = sum(1 for lid in self._items if lid in existing)
+        total_count = len(merged)
+        logger.info(
+            "LawIndexPipeline: %d new, %d updated, %d total entries -> %s",
+            new_count - updated_count,
+            updated_count,
+            total_count,
+            output_file,
+        )
+
+        entries = sorted(merged.values(), key=lambda e: (e.get("category", ""), e.get("law_name", "")))
+        with output_file.open("w", encoding="utf-8") as f:
+            json.dump(entries, f, ensure_ascii=False, indent=2)

@@ -63,7 +63,7 @@ class ContentDownloadSpider(Spider):
                 continue
             if entry.get("status") != "有效":
                 continue
-            if entry.get("law_type") != "法律":
+            if entry.get("law_type") not in {"法律", "宪法", "行政法规", "监察法规"}:
                 continue
 
             bbbs = entry.get("law_id", "") or entry.get("bbbs", "")

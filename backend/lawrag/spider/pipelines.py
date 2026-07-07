@@ -4,11 +4,75 @@ import json
 import logging
 from pathlib import Path
 
+from markitdown import MarkItDown
 from scrapy import Spider
 
-from lawrag.spider.items import LawIndexItem
+from lawrag.documents.lawparser import parse_multi_level, write_structured_law
+from lawrag.spider.items import LawDownloadItem, LawIndexItem
 
 logger = logging.getLogger(__name__)
+
+
+class ContentDownloadPipeline:
+    """Save downloaded law files to disk, convert to text, parse, and write structured output."""
+
+    def __init__(self) -> None:
+        self._results: list[dict] = []
+        self._md = MarkItDown()
+
+    def process_item(self, item: LawDownloadItem, spider: Spider) -> LawDownloadItem:
+
+        settings = spider.crawler.settings
+        download_dir = Path(settings.get("LAW_CONTENT_DOWNLOAD_DIR", "data/downloaded_laws"))
+        structured_dir = Path(settings.get("LAW_CONTENT_STRUCTURED_DIR", "data/structured_laws"))
+        download_dir.mkdir(parents=True, exist_ok=True)
+        structured_dir.mkdir(parents=True, exist_ok=True)
+
+        law_name: str = item["law_name"]
+        output_path = download_dir / item["filename"]
+
+        if not output_path.exists():
+            output_path.write_bytes(item["file_content"])
+            logger.info("Downloaded: %s -> %s", law_name, output_path)
+
+        try:
+            ext = item["extension"]
+            if ext == ".html":
+                text = output_path.read_text(encoding="utf-8")
+            elif ext in (".docx", ".doc"):
+                result = self._md.convert(str(output_path))
+                text = result.text_content
+            else:
+                logger.warning("Unsupported format %s for %s", ext, law_name)
+                self._results.append({"law_name": law_name, "status": "failed", "output": None})
+                return item
+
+            if not text:
+                self._results.append({"law_name": law_name, "status": "failed", "output": None})
+                return item
+
+            parsed = parse_multi_level(text)
+            if not parsed or (not parsed.get("articles") and not parsed.get("chapters") and not parsed.get("preamble")):
+                logger.warning("Failed to parse %s", law_name)
+                self._results.append({"law_name": law_name, "status": "failed", "output": None})
+                return item
+
+            structured = write_structured_law(parsed=parsed, output_dir=structured_dir, law_name=law_name)
+            self._results.append({"law_name": law_name, "status": "ok", "output": str(structured)})
+        except Exception:
+            logger.exception("Failed to process %s", law_name)
+            self._results.append({"law_name": law_name, "status": "error", "output": None})
+
+        return item
+
+    def close_spider(self, spider: Spider) -> None:
+        manifest_path = spider.crawler.settings.get("LAW_CONTENT_MANIFEST_PATH", "")
+        if manifest_path and self._results:
+            output = Path(manifest_path)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(json.dumps(self._results, ensure_ascii=False, indent=2), encoding="utf-8")
+            ok = sum(1 for r in self._results if r["status"] == "ok")
+            logger.info("Content download done: %d OK, %d total -> %s", ok, len(self._results), output)
 
 
 class LawIndexPipeline:

@@ -233,7 +233,7 @@ async def spider_download(
     Downloads docx/HTML from NPC database, converts to text,
     and parses multi-level structure (chapters/sections/articles).
     """
-    from lawrag.spider.content import LawContentDownloader
+    from lawrag.spider.runner import run_content_download
 
     if index_path is None:
         index_path = settings.DATA_ROOT / "law_index" / "law_index.json"
@@ -241,10 +241,10 @@ async def spider_download(
     if category == "all":
         category = None  # 'all' means no filtering
 
-    downloader = LawContentDownloader(download_dir=download_dir)
-    results = await downloader.process_index(
+    results = await run_content_download(
         index_path=index_path,
         structured_dir=output_dir,
+        download_dir=download_dir,
         category=category,
     )
     ok = sum(1 for r in results if r["status"] == "ok")

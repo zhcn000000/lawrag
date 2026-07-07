@@ -16,3 +16,13 @@ class LawIndexItem(Item):
     detail_url: Field = Field()
     category: Field = Field()
     index_number: Field = Field()
+
+
+class LawDownloadItem(Item):
+    """A downloaded law document file (raw bytes + metadata)."""
+
+    law_id: Field = Field()
+    law_name: Field = Field()
+    file_content: Field = Field()
+    filename: Field = Field()
+    extension: Field = Field()

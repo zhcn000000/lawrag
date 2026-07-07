@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import re
-
-from anyio import Path as AsyncPath
+from pathlib import Path
 
 CN_NUM_MAP: dict[str, int] = {
     "零": 0,
@@ -443,11 +442,11 @@ def parse_multi_level(content: str) -> dict:
     return result
 
 
-async def write_structured_law(
+def write_structured_law(
     parsed: dict,
-    output_dir: AsyncPath,
+    output_dir: Path,
     law_name: str | None = None,
-) -> AsyncPath:
+) -> Path:
     """Write a parsed multi-level law structure to a readable text file.
 
     The output format preserves chapter/section/article hierarchy:
@@ -468,7 +467,7 @@ async def write_structured_law(
     """
     name = law_name or parsed.get("law_name", "unknown_law")
     safe_name = re.sub(r"[^\w\u4e00-\u9fff\-]", "_", name)
-    await output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{safe_name}.txt"
 
     lines: list[str] = []
@@ -498,7 +497,7 @@ async def write_structured_law(
     for art in parsed.get("articles", []):
         lines.extend((f"第{_format_num(art['number'])}条  {art['content']}", ""))
 
-    await output_path.write_text("\n".join(lines), encoding="utf-8")
+    output_path.write_text("\n".join(lines), encoding="utf-8")
     return output_path
 
 

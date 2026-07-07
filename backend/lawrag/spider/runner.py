@@ -3,12 +3,14 @@
 Uses TWISTED_REACTOR_ENABLED=False for pure asyncio mode without a Twisted reactor.
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
 
 from scrapy.crawler import AsyncCrawlerRunner
 
+from lawrag.spider.content_spider import ContentDownloadSpider
 from lawrag.spider.law_spider import LawIndexSpider
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,31 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
 DEFAULT_OUTPUT = Path("data/law_index/law_index.json")
 
+CONTENT_DOWNLOAD_SETTINGS: dict[str, Any] = {
+    "BOT_NAME": "lawrag_spider_content",
+    "ROBOTSTXT_OBEY": False,
+    "DOWNLOAD_DELAY": 0.5,
+    "RANDOMIZE_DOWNLOAD_DELAY": True,
+    "CONCURRENT_REQUESTS": 4,
+    "CONCURRENT_REQUESTS_PER_DOMAIN": 2,
+    "LOG_LEVEL": "INFO",
+    "COOKIES_ENABLED": False,
+    "TELNETCONSOLE_ENABLED": False,
+    "RETRY_ENABLED": True,
+    "RETRY_TIMES": 3,
+    "DOWNLOAD_TIMEOUT": 60,
+    "DEFAULT_REQUEST_HEADERS": {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+    },
+    "ITEM_PIPELINES": {
+        "lawrag.spider.pipelines.ContentDownloadPipeline": 300,
+    },
+    "TWISTED_REACTOR_ENABLED": False,
+}
+
 
 async def run_law_index_spider(
     *,
@@ -57,3 +84,39 @@ async def run_law_index_spider(
 
     runner = AsyncCrawlerRunner(settings)
     await runner.crawl(LawIndexSpider, category=category)
+
+
+async def run_content_download(
+    index_path: str | Path,
+    *,
+    structured_dir: str | Path | None = None,
+    download_dir: str | Path | None = None,
+    category: str | None = None,
+) -> list[dict]:
+    """Run the Scrapy content download spider that downloads, converts, and parses laws.
+
+    Returns a list of result dicts: {"law_name": ..., "status": "ok"/"failed"/"error", "output": path}
+    """
+    settings = CONTENT_DOWNLOAD_SETTINGS.copy()
+
+    if download_dir is None:
+        download_dir = Path("data/downloaded_laws")
+    download_path = Path(download_dir)
+
+    if structured_dir is None:
+        structured_dir = Path("data/structured_laws")
+    structured_path = Path(structured_dir)
+
+    manifest_path = download_path / ".manifest.json"
+    settings["LAW_CONTENT_DOWNLOAD_DIR"] = str(download_path)
+    settings["LAW_CONTENT_STRUCTURED_DIR"] = str(structured_path)
+    settings["LAW_CONTENT_MANIFEST_PATH"] = str(manifest_path)
+
+    runner = AsyncCrawlerRunner(settings)
+    await runner.crawl(ContentDownloadSpider, index_path=str(index_path), category=category)
+
+    if not manifest_path.exists():
+        logger.warning("No manifest found — no files were downloaded.")
+        return []
+
+    return json.loads(manifest_path.read_text(encoding="utf-8"))

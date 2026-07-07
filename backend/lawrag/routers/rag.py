@@ -17,6 +17,8 @@ from .schema import (
     SearchResponse,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -40,7 +42,7 @@ async def api_search(request: SearchRequest) -> SearchResponse:
         ]
         return SearchResponse(success=True, status="搜索成功", results=results)
     except Exception as e:
-        logging.exception(e)
+        logger.exception("Search failed")
         return SearchResponse(success=False, status=f"搜索失败: {e!s}", results=[])
 
 
@@ -63,7 +65,7 @@ async def api_pageindex_import(request: PageIndexImportRequest) -> PageIndexImpo
             results=results,
         )
     except Exception as e:
-        logging.exception(e)
+        logger.exception("Page index import failed")
         return PageIndexImportResponse(success=False, status=f"导入失败: {e!s}", results=[])
 
 
@@ -74,7 +76,7 @@ async def api_pageindex_list_laws() -> LawListResponse:
         laws = await pageindex.alist_laws()
         return LawListResponse(success=True, status="获取法律列表成功", laws=laws)
     except Exception as e:
-        logging.exception(e)
+        logger.exception("List laws failed")
         return LawListResponse(success=False, status=f"获取失败: {e!s}", laws=[])
 
 
@@ -101,7 +103,7 @@ async def api_pageindex_get_articles(
             articles=[LawArticleResponse(**a) for a in articles],
         )
     except Exception as e:
-        logging.exception(e)
+        logger.exception("Get law articles failed")
         return LawArticleListResponse(success=False, status=f"获取失败: {e!s}", articles=[])
 
 
@@ -119,5 +121,5 @@ async def api_pageindex_get_article(
             article=LawArticleResponse(**article) if article else None,
         )
     except Exception as e:
-        logging.exception(e)
+        logger.exception("Get law article failed")
         return LawArticleDetailResponse(success=False, status=f"查找失败: {e!s}", article=None)

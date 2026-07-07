@@ -11,11 +11,13 @@ from lawrag.utils.templete import FIRST_INPUT_TEMPLATE
 from .struct import ModelDeps
 from .tools import code_toolset, rag_toolset, web_toolset
 
+logger = logging.getLogger(__name__)
+
 if os.environ.get("DEEPSEEK_API_KEY"):
     model = OpenAIChatModel(model_name="deepseek-v4-flash", provider=DeepSeekProvider())
 else:
     model = None
-    logging.warning("DEEPSEEK_API_KEY not found in environment variables. The agent will not function without a model.")
+    logger.warning("DEEPSEEK_API_KEY not found in environment variables. The agent will not function without a model.")
 agent: Agent[ModelDeps, str] = Agent(
     model=model,
     deps_type=ModelDeps,

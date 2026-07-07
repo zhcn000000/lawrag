@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 from anyio import Path as AsyncPath
-from sqlalchemy import delete, select
+from sqlalchemy import delete, exists, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.sql.functions import count
 from sqlmodel import col
@@ -11,7 +11,9 @@ from lawrag.database.document import DocumentStore
 from lawrag.documents.lawparser import parse_content
 
 from .database import DatabaseManager
-from .tables import LawArticle
+from .tables import DocumentTable, LawArticle
+
+logger = logging.getLogger(__name__)
 
 
 class LawPageIndex:
@@ -46,14 +48,14 @@ class LawPageIndex:
             stmt = (
                 insert(LawArticle)
                 .values(values)
-                .on_conflict_do_nothing(constraint="uq_law_article")
+                .on_conflict_do_nothing(index_elements=[col(LawArticle.law_name), col(LawArticle.article_number)])
                 .returning(col(LawArticle.id))
             )
             result = await session.execute(stmt)
             row_count = len(result.fetchall())
             await session.commit()
 
-        logging.info("Imported %s: %d articles", source_name, row_count)
+        logger.info("Imported %s: %d articles", source_name, row_count)
         return {"file": source_name, "status": "ok", "count": row_count}
 
     async def aimport_from_dir(
@@ -74,7 +76,7 @@ class LawPageIndex:
                     result = await self.aimport_file(file_path=file_path, category=category)
                     results.append(result)
                 except Exception:
-                    logging.exception("Failed to import %s", file_path)
+                    logger.exception("Failed to import %s", file_path)
                     results.append({"file": file_path.stem, "status": "error", "count": 0})
         return results
 
@@ -173,15 +175,11 @@ class LawPageIndex:
             count = len(result.fetchall())
             await session.commit()
 
-            logging.info("Deleted %d articles from law: %s", count, law_name)
+            logger.info("Deleted %d articles from law: %s", count, law_name)
             return count
 
     async def aembed_law_articles(
-        self,
-        law_name: str | None = None,
-        chunk_size: int = 4096,
-        chunk_overlap: int = 128,
-        batch_size: int = 50,
+        self, law_name: str | None = None, chunk_size: int = 4096, chunk_overlap: int = 128, batch_size: int = 64
     ) -> dict:
 
         doc_store = DocumentStore()
@@ -194,22 +192,31 @@ class LawPageIndex:
             async with self.__db.asession() as session:
                 stmt = select(LawArticle)
                 if law_name is not None:
-                    stmt = stmt.where(col(LawArticle.law_name) == law_name).order_by(col(LawArticle.law_name))
-                stmt = stmt.order_by(col(LawArticle.article_number)).offset(offset).limit(batch_size)
+                    stmt = stmt.where(col(LawArticle.law_name) == law_name)
+                stmt = stmt.where(
+                    ~exists(select(1).where(col(DocumentTable.law_id) == col(LawArticle.id))),
+                )
+                stmt = (
+                    stmt
+                    .order_by(col(LawArticle.law_name))
+                    .order_by(col(LawArticle.article_number))
+                    .offset(offset)
+                    .limit(batch_size)
+                )
                 result = await session.execute(stmt)
                 rows = result.scalars().all()
 
-            if not rows:
-                break
+                if not rows:
+                    break
 
-            texts = [
-                (
-                    f"《{row.law_name}》第{row.article_number}条规定，{row.content}。",
-                    row.id,
-                    law_name,
-                )
-                for row in rows
-            ]
+                texts = [
+                    (
+                        f"《{row.law_name}》第{row.article_number}条规定，{row.content}。",
+                        row.id,
+                        law_name,
+                    )
+                    for row in rows
+                ]
 
             try:
                 chunk_count = await doc_store.abatch_load_from_texts(
@@ -220,12 +227,12 @@ class LawPageIndex:
                 total_chunks += chunk_count
                 total_articles += len(rows)
             except Exception:
-                logging.exception("Failed to embed batch of %d articles for %s", len(rows), law_name)
+                logger.exception("Failed to embed batch of %d articles for %s", len(rows), law_name)
 
             offset += batch_size
-            logging.info("Embedded %s: %d articles so far...", law_name, total_articles)
+            logger.info("Embedded %s: %d articles so far...", law_name, total_articles)
 
-        logging.info("Embedded %s: %d articles, %d chunks total", law_name, total_articles, total_chunks)
+        logger.info("Embedded %s: %d articles, %d chunks total", law_name, total_articles, total_chunks)
         return {
             "law_name": law_name,
             "articles_embedded": total_articles,

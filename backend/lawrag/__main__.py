@@ -17,6 +17,8 @@ from lawrag.database.ragmode import RAGMode
 from lawrag.routers import app
 from lawrag.utils.environments import find_project_directory, settings
 
+logger = logging.getLogger(__name__)
+
 cmd = Typer(pretty_exceptions_enable=False)
 pageindex_cmd = Typer(pretty_exceptions_enable=False, help="法条索引命令")
 
@@ -98,7 +100,7 @@ async def pageindex_import(
     total = sum(r.get("count", 0) for r in results)
     ok = sum(1 for r in results if r.get("status") == "ok")
     error = sum(1 for r in results if r.get("status") == "error")
-    logging.info("导入完成: %d 个文件, 共 %d 条法条 (成功 %d, 失败 %d)", len(results), total, ok, error)
+    logger.info("导入完成: %d 个文件, 共 %d 条法条 (成功 %d, 失败 %d)", len(results), total, ok, error)
 
 
 @pageindex_cmd.command("list")
@@ -166,10 +168,10 @@ async def pageindex_embed(
     law_name: Annotated[str, Argument(help="Law name to embed from law_articles into documents")] | None = None,
     chunk_size: Annotated[int, Option("--chunk-size", "-s", help="Chunk size in tokens")] = 4096,
     chunk_overlap: Annotated[int, Option("--chunk-overlap", "-o", help="Chunk overlap in tokens")] = 128,
-    batch_size: Annotated[int, Option("--batch-size", "-b", help="Articles per batch")] = 50,
+    batch_size: Annotated[int, Option("--batch-size", "-b", help="Articles per batch")] = 64,
 ) -> None:
     pageindex = LawPageIndex()
-    logging.info("开始嵌入法律 '%s' 的法条...", law_name)
+    logger.info("开始嵌入法律 '%s' 的法条...", law_name)
     result = await pageindex.aembed_law_articles(
         law_name=law_name,
         chunk_size=chunk_size,
@@ -181,6 +183,66 @@ async def pageindex_embed(
     rprint(f"  分块数: {result['chunks_created']}")
 
 
+spider_cmd = Typer(pretty_exceptions_enable=False, help="法律爬虫命令")
+
+
+@spider_cmd.command("crawl")
+@runnify
+async def spider_crawl(
+    category: Annotated[
+        Literal["flfg", "xzfg", "sfjs", "all"],
+        Option("--category", "-c", help="Law category to crawl (skip dfxfg/locals)"),
+    ] = "all",
+    output: Annotated[str | None, Option("--output", "-o", help="Output JSON path for law index")] = None,
+) -> None:
+    """Stage 1: Crawl the NPC law database API to build a law index.
+
+    This only discovers laws; use 'spider download' to download and parse content.
+    Categories: flfg (法律), xzfg (行政法规), sfjs (司法解释).
+    """
+    from lawrag.spider.runner import run_law_index_spider
+
+    logger.info("Running law index spider for category: %s", category)
+    await run_law_index_spider(category=category, output=output)
+    logger.info("Law index crawl completed.")
+
+
+@spider_cmd.command("download")
+@runnify
+async def spider_download(
+    index_path: Annotated[str, Argument(help="Path to law index JSON file from 'lawrag spider crawl'")],
+    output_dir: Annotated[
+        str | None, Option("--output-dir", "-o", help="Output directory for structured law files")
+    ] = None,
+    download_dir: Annotated[
+        str | None, Option("--download-dir", "-d", help="Directory for raw downloaded docx files")
+    ] = None,
+    category: Annotated[
+        Literal["flfg", "xzfg", "sfjs"] | None, Option("--category", "-c", help="Filter by category")
+    ] = None,
+) -> None:
+    """Stage 2+3: Download and parse law content from previously crawled index.
+
+    Downloads docx/HTML from NPC database, converts to text,
+    and parses multi-level structure (chapters/sections/articles).
+    """
+    from lawrag.spider.content import LawContentDownloader
+
+    dl_dir = Path(download_dir) if download_dir else Path("data/raw_laws")
+    out_dir = Path(output_dir) if output_dir else Path("data/structured_laws")
+
+    downloader = LawContentDownloader(download_dir=dl_dir)
+    results = await downloader.process_index(
+        index_path=index_path,
+        structured_dir=out_dir,
+        category=category,
+    )
+    ok = sum(1 for r in results if r["status"] == "ok")
+    failed = sum(1 for r in results if r["status"] != "ok")
+    logger.info("Download+parse completed: %d OK, %d failed", ok, failed)
+
+
+cmd.add_typer(spider_cmd, name="spider")
 cmd.add_typer(pageindex_cmd, name="pageindex")
 
 

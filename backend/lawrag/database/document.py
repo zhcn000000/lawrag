@@ -93,14 +93,12 @@ class DocumentStore:
         for i, (law_id, content) in enumerate(all_chunks):
             bmvector = await atokenize_document(content)
             embeddings_i = embeddings[i] if i < len(embeddings) else []
-            insert_values.append(
-                {
-                    "law_id": law_id,
-                    "content": content,
-                    "vector": embeddings_i,
-                    "bmvector": dict(bmvector),
-                }
-            )
+            insert_values.append({
+                "law_id": law_id,
+                "content": content,
+                "vector": embeddings_i,
+                "bmvector": dict(bmvector),
+            })
 
         sub_batch = 10
         async with self.__db.asession() as session:

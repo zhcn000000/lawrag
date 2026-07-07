@@ -39,8 +39,8 @@ class EnvironmentSettings(BaseSettings):
     POSTGRES_DB: str = "data"
     POSTGRES_DSN: PostgresDsn | None = None
     POSTGRES_PASSWORD: SecretStr = SecretStr("postgres_password")
-    DATA_ROOT: Annotated[Path, Field(alias="RAG_DATA_ROOT")] = find_project_directory() / "data"
-    UUID_SEED: Annotated[UUID, Field(alias="RAG_UUID_SEED")] = UUID("11fa063e-b366-41a9-ac97-439b0a561846")
+    DATA_ROOT: Annotated[Path, Field(alias="LAWRAG_DATA_ROOT")] = find_project_directory() / "data"
+    UUID_SEED: Annotated[UUID, Field(alias="LAWRAG_UUID_SEED")] = UUID("11fa063e-b366-41a9-ac97-439b0a561846")
     RELEASE_MODE: Annotated[bool, Field(alias="RAG_RELEASE_MODE")] = True
     TMP_DIR: Annotated[Path, Field(alias="RAG_TMP_DIR")] = Path(mkdtemp())
     TOKEN_EXPIRES_IN: Annotated[int, Field(alias="RAG_TOKEN_EXPIRES_IN")] = 3600 * 6

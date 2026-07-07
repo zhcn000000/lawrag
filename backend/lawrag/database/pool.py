@@ -21,6 +21,8 @@ from lawrag.utils.environments import settings
 
 from .types import BM25Dumper, BM25Loader
 
+logger = logging.getLogger(__name__)
+
 
 def register_type(context: Connection) -> None:
     info = TypeInfo.fetch(context, "vector")
@@ -128,7 +130,7 @@ class ConnectionPoolManager:
         if dbname is None:
             dbname = self.dbname
         if dbname not in self._apools:
-            logging.debug("Creating new connection pool for database: %s", conninfo)
+            logger.debug("Creating new connection pool for database: %s", conninfo)
             self._apools[dbname] = AsyncConnectionPool(
                 conninfo,
                 name=dbname,

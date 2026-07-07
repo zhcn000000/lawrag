@@ -5,6 +5,8 @@ from httpx import AsyncClient, HTTPError, HTTPStatusError
 
 from .models import Document
 
+logger = logging.getLogger(__name__)
+
 MODEL_URL = "https://nw.lonwell.cn:10001"
 EMBEDDING_UID = "qwen3-embedding"
 RERANKER_UID = "qwen3-reranker"
@@ -23,7 +25,7 @@ async def _retry_post(url: str, json: dict, headers: dict, time_out: float = 60.
         except HTTPError as exc:
             if attempt == _MAX_RETRIES or (isinstance(exc, HTTPStatusError) and 400 <= exc.response.status_code < 500):
                 raise
-            logging.warning("HTTP 请求失败 (第 %d/%d 次): %s，重试中", attempt, _MAX_RETRIES, exc)
+            logger.warning("HTTP 请求失败 (第 %d/%d 次): %s，重试中", attempt, _MAX_RETRIES, exc)
         except Exception:
             raise
     raise RuntimeError("达到最大重试次数，仍然无法完成请求")

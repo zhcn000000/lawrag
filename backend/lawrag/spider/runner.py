@@ -12,6 +12,7 @@ from scrapy.crawler import AsyncCrawlerRunner
 
 from lawrag.spider.content_spider import ContentDownloadSpider
 from lawrag.spider.law_spider import LawIndexSpider
+from lawrag.utils.environments import settings as env_settings
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "TWISTED_REACTOR_ENABLED": False,
 }
 
-DEFAULT_OUTPUT = Path("data/law_index/law_index.json")
 
 CONTENT_DOWNLOAD_SETTINGS: dict[str, Any] = {
     "BOT_NAME": "lawrag_spider_content",
@@ -78,7 +78,7 @@ async def run_law_index_spider(
     if extra_settings:
         settings.update(extra_settings)
 
-    output_path = output or DEFAULT_OUTPUT
+    output_path = output or (env_settings.DATA_ROOT / "law_index" / "law_index.json")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     settings["LAW_INDEX_PATH"] = str(output_path)
 
@@ -99,13 +99,8 @@ async def run_content_download(
     """
     settings = CONTENT_DOWNLOAD_SETTINGS.copy()
 
-    if download_dir is None:
-        download_dir = Path("data/downloaded_laws")
-    download_path = Path(download_dir)
-
-    if structured_dir is None:
-        structured_dir = Path("data/structured_laws")
-    structured_path = Path(structured_dir)
+    download_path = Path(download_dir or env_settings.DATA_ROOT / "data" / "downloaded_laws")
+    structured_path = Path(structured_dir or env_settings.DATA_ROOT / "data" / "structured_laws")
 
     manifest_path = download_path / ".manifest.json"
     settings["LAW_CONTENT_DOWNLOAD_DIR"] = str(download_path)

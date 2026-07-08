@@ -74,9 +74,9 @@ async def database_clean(
     await clean_db(dbname=dbname)
 
 
-@cmd.command()
+@pageindex_cmd.command("query")
 @runnify
-async def search(
+async def pageindex_query(
     query: Annotated[str, Argument(help="Search query")],
     k: Annotated[int, Option("--top", "-k", help="Number of results")] = 5,
 ) -> None:

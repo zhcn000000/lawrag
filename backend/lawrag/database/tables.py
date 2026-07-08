@@ -175,7 +175,7 @@ class DocumentTable(SQLModel, table=True):
             sa_column=Column(
                 Uuid[UUID](native_uuid=True, as_uuid=True),
                 ForeignKey(col(LawNode.id), onupdate="CASCADE", ondelete="CASCADE"),
-                nullable=True,
+                nullable=False,
                 index=True,
             ),
         ),

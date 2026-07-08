@@ -230,13 +230,12 @@ async def spider_crawl(
     Categories: xf (宪法), flfg (法律), xzfg (行政法规), jcfg (监察法规), sfjs (司法解释).
     Use dfxfg for 地方性法规 (excluded from 'all').
     """
-    from pathlib import Path
 
     from lawrag.spider.runner import run_law_index_spider
 
     logger.info("Running law index spider for category: %s", category)
-    out_path = Path(output) if output else None
-    await run_law_index_spider(category=category, output=out_path)
+
+    await run_law_index_spider(category=category, output=output)
     logger.info("Law index crawl completed.")
 
 

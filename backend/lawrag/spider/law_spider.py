@@ -98,104 +98,55 @@ class LawIndexSpider(Spider):
             logger.warning("Unknown category '%s', known: %s. Defaulting to all.", category, known)
             self._category = "all"
 
+        self._code_ids = CATEGORY_CODE_MAP[self._category]
         self._total_items = 0
+        self._total_pages = 0
         self._seen_bbbs: set[str] = set()
         self._stale_pages = 0
 
     async def start(self) -> AsyncIterator[Request]:
         logger.info("Starting law index crawl for category: %s", self._category)
-        code_ids = CATEGORY_CODE_MAP[self._category]
-        body = _build_search_body(page=1, flfg_code_ids=code_ids)
+        body = _build_search_body(page=1, flfg_code_ids=self._code_ids)
         yield Request(
             url=SEARCH_API_URL,
             method="POST",
             body=json.dumps(body),
             headers=JSON_HEADERS,
-            callback=self.parse_first_page,
-            meta={"category": self._category, "code_ids": code_ids},
+            callback=self.parse_page,
             dont_filter=True,
+            meta={"page": 1},
         )
 
-    def parse_first_page(self, response: Response) -> Generator[Request | LawIndexItem | None]:
-        cat = response.meta["category"]
-        code_ids: list[int] = response.meta["code_ids"]
+    def parse_page(self, response: Response) -> Generator[Request | LawIndexItem]:
+        page: int = response.meta["page"]
+        is_first = page == 1
         try:
             data = json.loads(response.text)
         except json.JSONDecodeError:
-            logger.exception("Failed to parse JSON for %s page 1", cat)
+            logger.exception("JSON decode error for page %d", page)
             return
 
-        total_count = int(data.get("total", 0))
-        total_pages = (total_count + PAGE_SIZE - 1) // PAGE_SIZE
-
-        self._total_items = total_count
-        logger.info("Category '%s': %d total items, %d pages", cat, total_count, total_pages)
-
-        self._seen_bbbs = set()
-        self._stale_pages = 0
-
-        yield from self._parse_page_items(response, cat, 1)
-
-        if total_pages > 1:
-            yield self._build_page_request(cat, page=2, code_ids=code_ids, total_pages=total_pages)
-
-    def _build_page_request(
-        self,
-        cat: str,
-        *,
-        page: int,
-        code_ids: list[int],
-        total_pages: int = 0,
-    ) -> Request:
-        body = _build_search_body(page=page, flfg_code_ids=code_ids)
-        return Request(
-            url=SEARCH_API_URL,
-            method="POST",
-            body=json.dumps(body),
-            headers=JSON_HEADERS,
-            callback=self._parse_page_items,
-            meta={"category": cat, "code_ids": code_ids, "page": page, "total_pages": total_pages},
-            dont_filter=True,
-        )
-
-    def _parse_page_items(
-        self,
-        response: Response,
-        cat: str | None = None,
-        page: int = 0,
-    ) -> Generator[Request | LawIndexItem]:
-        cat = cat or response.meta["category"]
-        page = page or response.meta.get("page", 0)
-        code_ids: list[int] = response.meta.get("code_ids") or []
-        total_pages: int = response.meta.get("total_pages", 0)
-
-        assert isinstance(cat, str), "Category must be a string"
-
-        try:
-            data = json.loads(response.text)
-        except json.JSONDecodeError:
-            logger.exception("JSON decode error for %s page %d", cat, page)
-            return
+        if is_first:
+            total_count = int(data.get("total", 0))
+            self._total_items = total_count
+            self._total_pages = (total_count + PAGE_SIZE - 1) // PAGE_SIZE
+            self._seen_bbbs = set()
+            self._stale_pages = 0
+            logger.info("Category '%s': %d total items, %d pages", self._category, total_count, self._total_pages)
+        logger.info("Parsing page %d/%d: %d items", page, self._total_pages, len(data.get("rows", [])))
 
         law_list = data.get("rows", [])
-        if not law_list:
-            logger.warning("Empty data for %s page %d", cat, page)
-            return
-
-        new_items = 0
+        item_count = 0
         for idx, entry in enumerate(law_list):
-            index_num = (page - 1) * PAGE_SIZE + idx + 1
             sxx = entry.get("sxx")
             status = STATUS_MAP.get(sxx, str(sxx) if sxx is not None else "")
             bbbs = entry.get("bbbs", "")
 
-            if bbbs and bbbs in self._seen_bbbs:
-                continue
-
             if bbbs:
+                if bbbs in self._seen_bbbs:
+                    continue
                 self._seen_bbbs.add(bbbs)
-            new_items += 1
-
+            item_count += 1
             yield LawIndexItem(
                 law_id=bbbs,
                 law_name=entry.get("title", ""),
@@ -205,34 +156,38 @@ class LawIndexSpider(Spider):
                 law_type=entry.get("flxz", ""),
                 status=status,
                 detail_url=f"{DETAIL_BASE_URL}/detail2.html?{bbbs}" if bbbs else "",
-                category=cat,
-                index_number=str(index_num),
+                category=self._category,
+                index_number=str((page - 1) * PAGE_SIZE + idx + 1),
             )
 
-        if new_items == 0:
+        if item_count > 0:
+            self._stale_pages = 0
+        else:
             self._stale_pages += 1
             logger.warning(
-                "Page %d of '%s' returned no new items (%d/%d consecutive stale pages)",
+                "Page %d returned no new items (%d/%d consecutive stale pages)",
                 page,
-                cat,
                 self._stale_pages,
                 MAX_STALE_PAGES,
             )
-        else:
-            self._stale_pages = 0
 
-        logger.debug("Parsed page %d of %s: %d items (%d new)", page, cat, len(law_list), new_items)
+        logger.debug("Parsed page %d: %d items (%d new)", page, len(data.get("rows", [])), item_count)
 
         if self._stale_pages >= MAX_STALE_PAGES:
-            logger.info("Stopping pagination for '%s' after %d stale pages", cat, self._stale_pages)
+            logger.info("Stopping pagination after %d stale pages", self._stale_pages)
             return
 
         next_page = page + 1
-        if total_pages and next_page > total_pages:
+        if self._total_pages and next_page > self._total_pages:
             return
 
-        if not code_ids:
-            logger.warning("Missing code_ids in meta for '%s' page %d, cannot continue pagination", cat, page)
-            return
-
-        yield self._build_page_request(cat, page=next_page, code_ids=code_ids, total_pages=total_pages)
+        body = _build_search_body(page=next_page, flfg_code_ids=self._code_ids)
+        yield Request(
+            url=SEARCH_API_URL,
+            method="POST",
+            body=json.dumps(body),
+            headers=JSON_HEADERS,
+            callback=self.parse_page,
+            meta={"page": next_page},
+            dont_filter=True,
+        )

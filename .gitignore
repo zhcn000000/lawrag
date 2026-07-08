@@ -3,4 +3,5 @@ _assets_/
 .idea/
 .vscode/
 .obsidian/
+.opencode/
 .env

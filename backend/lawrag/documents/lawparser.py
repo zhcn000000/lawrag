@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import re
 
 from anyio import Path as AsyncPath
@@ -62,8 +60,20 @@ _PATH_SEGMENT = {
 }
 
 
+def _norm(s: str) -> str:
+    """去除半角/全角空格, 用于比对无实义分隔空格的标题 (如 '序　言' / '目　录')。"""
+    return s.replace(" ", "").replace("\u3000", "")
+
+
 def _is_preamble_marker(line: str) -> bool:
-    return line.replace(" ", "").replace("\u3000", "") == "序言"
+    return _norm(line) == "序言"
+
+
+def has_parsed_content(parsed: dict) -> bool:
+    """``parse_multi_level`` 结果是否含可写出的实质内容 (编/章/条/序言之一)。"""
+    return bool(
+        parsed and (parsed.get("parts") or parsed.get("chapters") or parsed.get("articles") or parsed.get("preamble"))
+    )
 
 
 def _assign_paths(nodes: list[dict]) -> None:
@@ -324,11 +334,8 @@ def parse_multi_level(content: str) -> dict:
             or SUBPART_PATTERN.match(stripped)
             or CHAPTER_PATTERN.match(stripped)
             or SECTION_PATTERN.match(stripped)
-            or stripped == "序 言",
+            or _is_preamble_marker(stripped),
         )
-
-    def _norm(s: str) -> str:
-        return s.replace(" ", "").replace("\u3000", "")
 
     # Detect and skip table of contents (raw markitdown 常把目录整段列在正文前, 会与正文重复)
     toc_end = -1
@@ -397,8 +404,8 @@ def parse_multi_level(content: str) -> dict:
 
     body_lines = _split_multi_articles(body_lines)
 
-    def _is_likely_heading(stripped: str) -> tuple[bool, str]:
-        """判断以 第X编/分编/章/节 开头的行是真标题还是正文引用。"""
+    def _is_likely_heading(stripped: str) -> tuple[str, int, str] | None:
+        """将以 第X编/分编/章/节 开头的真标题解析为 ``(kind, number, title)``; 正文引用返回 None。"""
         for pattern, kind in (
             (SUBPART_PATTERN, "subpart"),
             (PART_PATTERN, "part"),
@@ -409,9 +416,9 @@ def parse_multi_level(content: str) -> dict:
             if m:
                 title = m.group(2).strip()
                 if not title or title[0] in "的第之中。，、；":
-                    return False, ""
-                return True, kind
-        return False, ""
+                    return None
+                return kind, cn_to_int(m.group(1)), title
+        return None
 
     for line in body_lines:
         stripped = line.strip()
@@ -420,7 +427,7 @@ def parse_multi_level(content: str) -> dict:
                 article_buffer.append(" ")
             continue
 
-        if stripped == "序 言":
+        if _is_preamble_marker(stripped):
             preamble_active = True
             continue
 
@@ -437,40 +444,23 @@ def parse_multi_level(content: str) -> dict:
             continue
 
         art_m = ARTICLE_PATTERN.match(stripped)
-        is_heading, heading_type = _is_likely_heading(stripped)
+        heading = _is_likely_heading(stripped)
 
-        if is_heading:
+        if heading is not None:
+            kind, number, title = heading
             _flush_article()
-            if heading_type == "part":
+            if kind == "part":
                 _flush_part()
-                m = PART_PATTERN.match(stripped)
-                if m is None:
-                    continue
-                current_part = {"number": cn_to_int(m.group(1)), "title": m.group(2).strip()}
-            elif heading_type == "subpart":
+                current_part = {"number": number, "title": title}
+            elif kind == "subpart":
                 _flush_subpart()
-                m = SUBPART_PATTERN.match(stripped)
-                if m is None:
-                    continue
-                current_subpart = {"number": cn_to_int(m.group(1)), "title": m.group(2).strip()}
-            elif heading_type == "chapter":
+                current_subpart = {"number": number, "title": title}
+            elif kind == "chapter":
                 _flush_chapter()
-                ch_m = CHAPTER_PATTERN.match(stripped)
-                if ch_m is None:
-                    continue
-                current_chapter = {
-                    "number": cn_to_int(ch_m.group(1)),
-                    "title": ch_m.group(2).strip(),
-                }
+                current_chapter = {"number": number, "title": title}
             else:
                 _flush_section()
-                sec_m = SECTION_PATTERN.match(stripped)
-                if sec_m is None:
-                    continue
-                current_section = {
-                    "number": cn_to_int(sec_m.group(1)),
-                    "title": sec_m.group(2).strip(),
-                }
+                current_section = {"number": number, "title": title}
             continue
 
         if art_m:

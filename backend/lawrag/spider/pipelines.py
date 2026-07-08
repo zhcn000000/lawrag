@@ -8,7 +8,7 @@ from anyio import Path as AsyncPath
 from asyncer import asyncify
 from markitdown import MarkItDown
 
-from lawrag.documents.lawparser import parse_multi_level, write_structured_law
+from lawrag.documents.lawparser import has_parsed_content, parse_multi_level, write_structured_law
 from lawrag.spider.items import LawDownloadItem, LawIndexItem
 from lawrag.utils.environments import settings as env_settings
 
@@ -78,7 +78,7 @@ class ContentDownloadPipeline:
             await (self.raw_dir / f"{law_name}.txt").write_text(text, encoding="utf-8")
 
             parsed = parse_multi_level(text)
-            if not parsed or (not parsed.get("articles") and not parsed.get("chapters") and not parsed.get("preamble")):
+            if not has_parsed_content(parsed):
                 logger.warning("Failed to parse %s", law_name)
                 self._results.append({"law_name": law_name, "status": "failed", "output": None})
                 return item

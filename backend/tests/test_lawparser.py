@@ -1,6 +1,6 @@
 import pytest
 
-from lawrag.documents.lawparser import cn_to_int, parse_multi_level, parse_structured_law
+from lawrag.documents.lawparser import cn_to_int, has_parsed_content, parse_multi_level, parse_structured_law
 
 STRUCTURED_LAW = "\n".join([
     "=" * 60,
@@ -214,3 +214,21 @@ def test_parse_multi_parts_and_toc() -> None:
     # 第二编 下有分编, 分编下有章
     assert p2["subparts"][0]["title"] == "通　　则"
     assert p2["subparts"][0]["chapters"][0]["articles"][0]["number"] == 2
+
+
+def test_has_parsed_content_parts_only() -> None:
+    """仅含 parts 的编结构法律 (如民法典) 应视为解析成功。"""
+    content = "\n".join([
+        "中华人民共和国测试法典",
+        "第一编　总　　则",
+        "第一章　基本规定",
+        "第一条　总则第一条。",
+    ])
+    parsed = parse_multi_level(content)
+    assert "parts" in parsed
+    assert has_parsed_content(parsed) is True
+
+
+def test_has_parsed_content_empty() -> None:
+    assert has_parsed_content(parse_multi_level("")) is False
+    assert has_parsed_content({}) is False

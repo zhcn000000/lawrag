@@ -22,7 +22,9 @@ from lawrag.utils.environments import settings
 logger = logging.getLogger(__name__)
 
 cmd = Typer(pretty_exceptions_enable=False)
+database_cmd = Typer(pretty_exceptions_enable=False, help="数据库操作命令")
 pageindex_cmd = Typer(pretty_exceptions_enable=False, help="法条索引命令")
+spider_cmd = Typer(pretty_exceptions_enable=False, help="法律爬虫命令")
 
 
 @cmd.command()
@@ -47,18 +49,28 @@ async def start() -> None:
     await server.serve()
 
 
-@cmd.command()
+@database_cmd.command("init")
 @runnify
-async def database(
-    mode: Annotated[Literal["init", "reset", "clean"], Argument(help="Database operation mode")],
+async def database_init(
     dbname: Annotated[str | None, Option("--dbname", "-d", help="Name of the database to initialize")] = None,
 ) -> None:
-    if mode == "init":
-        await init_db(dbname=dbname)
-    elif mode == "reset":
-        await reset_db(dbname=dbname)
-    elif mode == "clean":
-        await clean_db(dbname=dbname)
+    await init_db(dbname=dbname)
+
+
+@database_cmd.command("reset")
+@runnify
+async def database_reset(
+    dbname: Annotated[str | None, Option("--dbname", "-d", help="Name of the database to reset")] = None,
+) -> None:
+    await reset_db(dbname=dbname)
+
+
+@database_cmd.command("clean")
+@runnify
+async def database_clean(
+    dbname: Annotated[str | None, Option("--dbname", "-d", help="Name of the database to clean")] = None,
+) -> None:
+    await clean_db(dbname=dbname)
 
 
 @cmd.command()
@@ -259,9 +271,6 @@ async def pageindex_convert(
     logger.info("转换完成: %d OK, %d 跳过, %d 失败 (共 %d)", ok, skipped, errors, len(results))
 
 
-spider_cmd = Typer(pretty_exceptions_enable=False, help="法律爬虫命令")
-
-
 @spider_cmd.command("crawl")
 @runnify
 async def spider_crawl(
@@ -331,6 +340,7 @@ async def spider_download(
 
 cmd.add_typer(spider_cmd, name="spider")
 cmd.add_typer(pageindex_cmd, name="pageindex")
+cmd.add_typer(database_cmd, name="database")
 
 
 def main():

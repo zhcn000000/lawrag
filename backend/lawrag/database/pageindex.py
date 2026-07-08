@@ -197,6 +197,37 @@ class LawPageIndex:
             result = await session.execute(stmt)
             return list(starmap(_article_dict, result.all()))
 
+    async def aget_node_by_path(self, law_name: str, path: str) -> dict | None:
+        """按层级路径 path 精确获取单个节点信息 (法条或章节标题)。
+
+        path 与 abrowse_law 相同, 会自动补全 ``law0/`` 前缀。返回值字段对齐检索结果单条: 面包屑/路径/内容。
+        """
+        if not path.startswith("law0/"):
+            path = f"law0/{path.removeprefix('/')}"
+        async with self.__db.asession() as session:
+            node = (
+                (
+                    await session.execute(
+                        select(LawNode).where(
+                            col(LawNode.law_name) == law_name,
+                            col(LawNode.path) == path,
+                        ),
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if node is None:
+                return None
+            return {
+                "law_name": node.law_name,
+                "path": node.path,
+                "node_type": node.node_type,
+                "number": node.number,
+                "full_path": node.full_path or node.law_name,
+                "content": node.content or "",
+            }
+
     async def abrowse_law(
         self,
         law_name: str,

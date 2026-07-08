@@ -34,7 +34,7 @@ backend/
 │   ├── chat/
 │   │   ├── model.py           # pydantic-ai Agent 装配 (DeepSeekProvider + toolsets)
 │   │   ├── struct.py          # ModelDeps (select_toolset)
-│   │   ├── rag_tools.py       # rag_toolset: list_laws / search_documents / get_law_articles / get_law_toc / browse_law
+│   │   ├── rag_tools.py       # rag_toolset: list_laws / search_documents / get_article_by_path / get_law_articles / get_law_toc / browse_law
 │   │   ├── code_tools.py      # code_toolset: python_repl (pydantic-monty)
 │   │   └── web_tools.py       # web_toolset: search_web / extract_web / crawl_web / fetch_web (exa + httpx + bs4)
 │   ├── database/

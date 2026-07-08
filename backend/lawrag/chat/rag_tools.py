@@ -118,6 +118,41 @@ async def search_documents(
 
 
 @rag_toolset.tool(
+    name="get_article_by_path",
+    description="""根据层级路径 `path` 获取该 path 本身对应的法条(或章节)信息, 返回格式同 search_documents 的单条结果。
+`path` 原样取自 search_documents / get_law_toc / browse_law 返回的 `path` 列 (如 'law0/b2/c2/s1' 或 'b2/c2/s1')。
+适用于已知某条法条的 path, 想直接查看它的完整内容与所属章节面包屑, 而无需再次搜索。""",
+    prepare=prepare_rag,
+)
+async def get_article_by_path(
+    ctx: RunContext[ModelDeps],
+    law_name: Annotated[str, Field(description="法律名称, 例如'中华人民共和国民法典'")],
+    path: Annotated[str, Field(description="层级路径, 原样取自其它工具返回的 `path` 列, 如 'law0/b2/c2/s1'")],
+) -> Annotated[str, Field(description="返回markdown格式的单条法条信息")]:
+    try:
+        node = await page_index.aget_node_by_path(law_name=law_name, path=path)
+        if node is None:
+            return (
+                f"未在法律 '{law_name}' 中找到 path='{path}'。"
+                "path 应原样取自 search_documents / get_law_toc / browse_law 返回的 `path` 值。"
+            )
+
+        data = [
+            {
+                "路径": node["path"],
+                "内容": node["content"] or "-",
+                "来源": node["full_path"] or "-",
+            },
+        ]
+        md = "## 法条信息\n\n"
+        dff = pd.DataFrame(data)
+        md += dff.to_markdown(index=False)
+        return md
+    except Exception as e:
+        raise ModelRetry(f"获取法条信息失败: {e!s}") from e
+
+
+@rag_toolset.tool(
     name="get_law_articles",
     description="""获取某个范围的法条内容""",
     prepare=prepare_rag,

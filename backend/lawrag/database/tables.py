@@ -104,8 +104,20 @@ class HistoryTable(SQLModel, table=True):
     messages: Annotated[list[Any], Field(sa_column=Column(JSONB, nullable=False, server_default="[]"))]
 
 
-class LawArticle(SQLModel, table=True):
-    __tablename__ = "law_articles"
+class LawNode(SQLModel, table=True):
+    """法律的多级页面索引 (page index) 节点, 以自引用外键构成树状结构.
+
+    node_type 取值: "law"(根) / "preamble"(序言) / "part"(编) / "subpart"(分编)
+    / "chapter"(章) / "section"(节) / "article"(条).
+    - part/subpart/chapter/section 使用 title 存标题, content 为空;
+    - article/preamble 使用 content 存正文, title 为空;
+    - number 为编/分编/章/节/条的序号 (中文数字转整数);
+    - order_index 保留原文顺序, 用于稳定排序与还原层级;
+    - path 为同一部法律内唯一的物化路径 (materialized path), 配合
+      (law_name, path) 唯一约束防止重复插入。
+    """
+
+    __tablename__ = "law_nodes"
 
     id: Annotated[
         UUID,
@@ -127,13 +139,23 @@ class LawArticle(SQLModel, table=True):
             ),
         ),
     ]
-    article_number: Annotated[
-        int,
+    parent_id: Annotated[
+        UUID | None,
         Field(
-            sa_column=Column(Integer, nullable=False),
+            sa_column=Column(
+                Uuid[UUID](native_uuid=True, as_uuid=True),
+                ForeignKey("law_nodes.id", onupdate="CASCADE", ondelete="CASCADE"),
+                nullable=True,
+                index=True,
+            ),
         ),
     ]
-    content: Annotated[str, Field(sa_column=Column(Text, nullable=False))]
+    node_type: Annotated[str, Field(sa_column=Column(String(16), nullable=False, index=True))]
+    number: Annotated[int | None, Field(sa_column=Column(Integer, nullable=True))]
+    title: Annotated[str | None, Field(sa_column=Column(Text, nullable=True))]
+    content: Annotated[str | None, Field(sa_column=Column(Text, nullable=True))]
+    order_index: Annotated[int, Field(sa_column=Column(Integer, nullable=False, server_default="0"))]
+    path: Annotated[str, Field(sa_column=Column(String(256), nullable=False, server_default=""))]
     category: Annotated[str | None, Field(sa_column=Column(String(128), nullable=True, index=True))]
     meta: Annotated[
         dict,
@@ -145,13 +167,19 @@ class LawArticle(SQLModel, table=True):
     def __table_args__(cls) -> tuple:
         return (
             Index(
-                "idx_law_articles_law_name",
+                "idx_law_nodes_law_name",
                 col(cls.law_name),
             ),
             Index(
-                "uq_law_article",
+                "idx_law_nodes_law_name_order",
                 col(cls.law_name),
-                col(cls.article_number),
+                col(cls.order_index),
+            ),
+            # (law_name, path) 作为稳定的自然键, 防止同一结构节点重复插入
+            Index(
+                "uq_law_nodes_law_name_path",
+                col(cls.law_name),
+                col(cls.path),
                 unique=True,
             ),
         )
@@ -169,12 +197,12 @@ class DocumentTable(SQLModel, table=True):
             ),
         ),
     ]
-    law_id: Annotated[
+    node_id: Annotated[
         UUID | None,
         Field(
             sa_column=Column(
                 Uuid[UUID](native_uuid=True, as_uuid=True),
-                ForeignKey(col(LawArticle.id), onupdate="CASCADE", ondelete="CASCADE"),
+                ForeignKey(col(LawNode.id), onupdate="CASCADE", ondelete="CASCADE"),
                 nullable=True,
             ),
         ),

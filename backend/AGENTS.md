@@ -23,6 +23,7 @@ backend/
 │   ├── routers/           # FastAPI 路由 (chat, rag, user, schema)
 │   ├── chat/              # pydantic-ai Agent 与 toolsets (rag/code/web)
 │   ├── database/          # SQLModel 表与存储 (DocumentStore, RAGMode, LawPageIndex, HistoryStore, UserManager)
+│   │                      # 法条以 LawNode 自引用树 (law/章/节/条) 存储, 数据集在 data/structured_laws
 │   ├── documents/         # 解析、切分、嵌入 (lawparser, embedder, splitter, tokenizer, converter)
 │   ├── tools/             # MCP 与 Tool 基础类
 │   └── utils/             # environments.py 加载 .env/.proj_root
@@ -51,7 +52,7 @@ CLI 子命令（`lawrag`）：
 - `search <query> [-k N] [-p PAGE]`
 - `ingest dir <DIR> [-c CATEGORY] [-s CHUNK_SIZE] [-o CHUNK_OVERLAP]`
 - `ingest file <PATH> [-c CATEGORY]`
-- `pageindex import|list|show|search|embed`
+- `pageindex import|list|show|toc|search|embed`
 
 顶层便捷命令（仓库根目录 `justfile`）：`just web` / `just initdb` / `just ingest-dir`。
 

@@ -8,6 +8,8 @@ from lawrag.tools.base import (
     crawl_web_base,
     extract_web_base,
     fetch_web_base,
+    get_articles_under_chapter_base,
+    get_law_toc_base,
     python_repl_base,
     search_documents_base,
     search_law_articles_base,
@@ -95,6 +97,38 @@ async def search_law_articles(
         )
     except Exception as e:
         raise ModelRetry(f"法条查找失败: {e!s}") from e
+
+
+@rag_toolset.tool(
+    name="get_law_toc",
+    description="获取指定法律的多级目录(章/节标题结构)。用于了解一部法律的整体框架, 或定位某条法条所属的章节。",
+    prepare=prepare_rag,
+)
+async def get_law_toc(
+    ctx: RunContext[ModelDeps],
+    law_name: Annotated[str, Field(description="法律名称, 例如'中华人民共和国民法典'")],
+) -> Annotated[str, Field(description="返回markdown格式的法律章节目录")]:
+    try:
+        return await get_law_toc_base(law_name=law_name)
+    except Exception as e:
+        raise ModelRetry(f"获取法律目录失败: {e!s}") from e
+
+
+@rag_toolset.tool(
+    name="get_articles_under_chapter",
+    description="获取某部法律某一章(含其下各节)内的全部法条文本。先用 get_law_toc 得到章标题, 再用本工具按章批量取条。",
+    prepare=prepare_rag,
+)
+async def get_articles_under_chapter(
+    ctx: RunContext[ModelDeps],
+    law_name: Annotated[str, Field(description="法律名称, 例如'中华人民共和国民法典'")],
+    chapter_title: Annotated[str, Field(description="章标题, 例如'总则'或'自然人'")],
+    limit: Annotated[int, Field(description="返回条文数量上限")] = 200,
+) -> Annotated[str, Field(description="返回markdown格式的该章法条列表")]:
+    try:
+        return await get_articles_under_chapter_base(law_name=law_name, chapter_title=chapter_title, limit=limit)
+    except Exception as e:
+        raise ModelRetry(f"获取章节法条失败: {e!s}") from e
 
 
 @code_toolset.tool(

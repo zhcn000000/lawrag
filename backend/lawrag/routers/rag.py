@@ -11,6 +11,7 @@ from .schema import (
     LawArticleListResponse,
     LawArticleResponse,
     LawListResponse,
+    LawTocResponse,
     PageIndexImportRequest,
     PageIndexImportResponse,
     SearchRequest,
@@ -36,6 +37,7 @@ async def api_search(request: SearchRequest) -> SearchResponse:
             {
                 "content": d.content,
                 "source_name": d.name,
+                "page_index": d.page_index,
                 "score": d.query_score if d.query_score is not None else float("nan"),
             }
             for d in docs
@@ -105,6 +107,17 @@ async def api_pageindex_get_articles(
     except Exception as e:
         logger.exception("Get law articles failed")
         return LawArticleListResponse(success=False, status=f"获取失败: {e!s}", articles=[])
+
+
+@router.get("/pageindex/laws/{law_name}/toc")
+async def api_pageindex_get_toc(law_name: str) -> LawTocResponse:
+    try:
+        pageindex = LawPageIndex()
+        toc = await pageindex.aget_law_toc(law_name=law_name)
+        return LawTocResponse(success=True, status=f"获取 {law_name} 目录成功", law_name=law_name, toc=toc)
+    except Exception as e:
+        logger.exception("Get law toc failed")
+        return LawTocResponse(success=False, status=f"获取失败: {e!s}", law_name=law_name, toc=[])
 
 
 @router.get("/pageindex/laws/{law_name}/articles/{article_number}")

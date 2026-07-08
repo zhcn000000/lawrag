@@ -10,6 +10,7 @@ class Document(BaseModel):
     name: str | None = None
     query_score: float | None = None
     id: UUID | None = None
+    page_index: str | None = None
 
 
 @cache

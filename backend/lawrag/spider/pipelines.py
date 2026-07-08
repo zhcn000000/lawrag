@@ -19,6 +19,7 @@ class ContentDownloadPipeline:
 
     download_dir: Path | None = None
     structured_dir: Path | None = None
+    raw_dir: Path | None = None
     md: MarkItDown = MarkItDown()
 
     def __init__(self) -> None:
@@ -34,11 +35,18 @@ class ContentDownloadPipeline:
         pipeline.structured_dir = Path(
             settings.get("LAW_CONTENT_STRUCTURED_DIR", env_settings.DATA_ROOT / "structured_laws")
         )
+        pipeline.raw_dir = Path(settings.get("LAW_CONTENT_RAW_DIR", env_settings.DATA_ROOT / "raw_laws"))
+
+        for dir_path in (pipeline.download_dir, pipeline.structured_dir, pipeline.raw_dir):
+            dir_path.mkdir(parents=True, exist_ok=True)
+
         return pipeline
 
     def process_item(self, item: LawDownloadItem) -> LawDownloadItem:
         assert self.download_dir is not None, "download_dir must be set"
         assert self.structured_dir is not None, "structured_dir must be set"
+        assert self.raw_dir is not None, "raw_dir must be set"
+
         self.download_dir.mkdir(parents=True, exist_ok=True)
         self.structured_dir.mkdir(parents=True, exist_ok=True)
 
@@ -64,6 +72,7 @@ class ContentDownloadPipeline:
             if not text:
                 self._results.append({"law_name": law_name, "status": "failed", "output": None})
                 return item
+            (self.raw_dir / f"{law_name}.txt").write_text(text, encoding="utf-8")
 
             parsed = parse_multi_level(text)
             if not parsed or (not parsed.get("articles") and not parsed.get("chapters") and not parsed.get("preamble")):

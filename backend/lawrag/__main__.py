@@ -15,7 +15,7 @@ from lawrag.database.initdb import clean_db, init_db, reset_db
 from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragmode import RAGMode
 from lawrag.routers import app
-from lawrag.utils.environments import find_project_directory, settings
+from lawrag.utils.environments import settings
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ async def pageindex_import(
 ) -> None:
     pageindex = LawPageIndex()
     if path is None:
-        path = find_project_directory() / "testdoc"
+        path = settings.DATA_ROOT / "structured_laws"
     if path.is_dir():
         results = await pageindex.aimport_from_dir(dir_path=path, category=category)
     else:
@@ -138,6 +138,33 @@ async def pageindex_show(
     for a in articles:
         content = a["content"][:120].replace("\n", " ") + ("..." if len(a["content"]) > 120 else "")
         table.add_row(f"第{a['article_number']}条", content)
+    rprint(table)
+
+
+@pageindex_cmd.command("toc")
+@runnify
+async def pageindex_toc(
+    law_name: Annotated[str, Argument(help="Law name to show table of contents")],
+) -> None:
+    pageindex = LawPageIndex()
+    toc = await pageindex.aget_law_toc(law_name=law_name)
+    if not toc:
+        rprint(f"未找到法律 '{law_name}' 的章节目录")
+        return
+    unit = {"part": "编", "subpart": "分编", "chapter": "章", "section": "节"}
+    table = Table(title=f"{law_name} 目录", title_style="bold")
+    table.add_column("层级", style="cyan", width=8)
+    table.add_column("编号", style="cyan", width=6)
+    table.add_column("标题", style="white")
+
+    def _walk(nodes: list[dict], depth: int) -> None:
+        for node in nodes:
+            u = unit.get(node["node_type"], "")
+            num = str(node["number"]) if node.get("number") is not None else "-"
+            table.add_row(u, num, f"{'  ' * depth}{node.get('title') or ''}")
+            _walk(node.get("children") or [], depth + 1)
+
+    _walk(toc, 0)
     rprint(table)
 
 

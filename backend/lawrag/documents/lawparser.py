@@ -41,163 +41,170 @@ def cn_to_int(cn: str) -> int:
     return result
 
 
-FORMAT_B_PATTERN = re.compile(
-    r"^《(.+?)》第([零一二三四五六七八九十百千]+)条规定，(.+)。$",
-)
-
-
-def parse_format_b_line(line: str) -> tuple[str, int, str] | None:
-    """解析格式B的一行法条: 《XX法》第X条规定，{内容}。"""
-    m = FORMAT_B_PATTERN.match(line.strip())
-    if m is None:
-        return None
-    law_name = m.group(1)
-    article_cn = m.group(2)
-    content = m.group(3)
-    article_num = cn_to_int(article_cn)
-    return law_name, article_num, content
-
-
-def parse_format_b(content: str) -> list[tuple[str, int, str]]:
-    """解析格式B的全文(每行一条法条)"""
-    results: list[tuple[str, int, str]] = []
-    for raw_line in content.splitlines():
-        stripped = raw_line.strip()
-        if not stripped:
-            continue
-        parsed = parse_format_b_line(stripped)
-        if parsed:
-            results.append(parsed)
-    return results
-
-
 CHAPTER_PATTERN = re.compile(r"^第([零一二三四五六七八九十百千]+)章\s*(.+)$")
 SECTION_PATTERN = re.compile(r"^第([零一二三四五六七八九十百千]+)节\s*(.+)$")
 ARTICLE_PATTERN = re.compile(r"^第([零一二三四五六七八九十百千]+)条\s*(.*)$")
-ARTICLE_SPLIT_PATTERN = re.compile(r"(第[零一二三四五六七八九十百千]+条)")
+ARTICLE_HEADING_PAT = re.compile(r"^第[零一二三四五六七八九十百千]+条\s+")
+PART_PATTERN = re.compile(r"^第([零一二三四五六七八九十百千]+)编\s*(.+)$")
+SUBPART_PATTERN = re.compile(r"^第([零一二三四五六七八九十百千]+)分编\s*(.+)$")
+
+STRUCT_RULE_PATTERN = re.compile(r"^=+$")
+
+# 节点类型 -> path 段前缀, 用于构造稳定的物化路径 (materialized path) 作为去重键
+_PATH_SEGMENT = {
+    "part": "b",
+    "subpart": "sb",
+    "chapter": "c",
+    "section": "s",
+    "article": "a",
+    "preamble": "pre",
+}
 
 
-def parse_format_a(content: str) -> list[tuple[str, int, str]]:
-    """解析格式A - 宪法格式(有章节标题, 法条可跨多行, 一行可有多条法条)
+def _is_preamble_marker(line: str) -> bool:
+    return line.replace(" ", "").replace("\u3000", "") == "序言"
 
-    返回 [(law_name, article_number, content), ...]
-    article_number=0 表示序言
+
+def _assign_paths(nodes: list[dict]) -> None:
+    """为每个节点计算稳定的物化路径 ``path`` (同一部法律内唯一, 作为去重键)。"""
+    for i, node in enumerate(nodes):
+        parent = node["parent"]
+        seg_prefix = _PATH_SEGMENT.get(node["node_type"], node["node_type"])
+        # number 缺失 (如序言) 时退化用 order 下标
+        seg = f"{seg_prefix}{node['number']}" if node.get("number") is not None else f"{seg_prefix}{i}"
+        node["path"] = seg if parent is None else f"{nodes[parent]['path']}/{seg}"
+
+
+def parse_structured_law(content: str, law_name: str) -> list[dict]:
+    """解析 ``write_structured_law`` 生成的多级结构化法律文本, 返回树状节点列表.
+
+    每个节点为 dict, ``parent`` 为其父节点在返回列表中的下标 (根节点为 None),
+    ``path`` 为同一部法律内唯一的物化路径 (用于去重)::
+
+        {
+            "node_type": str,
+            "number": int | None,
+            "title": str | None,
+            "content": str | None,
+            "parent": int | None,
+            "path": str,
+        }
+
+    列表首个元素恒为 node_type="law" 的根节点; 其后按原文顺序为
+    preamble / part(编) / subpart(分编) / chapter(章) / section(节) / article(条)。
+    层级关系: 编 → 分编 → 章 → 节 → 条; 缺失的层级会被跳过, 条挂在最近的祖先下。
     """
+    nodes: list[dict] = [
+        {"node_type": "law", "number": None, "title": law_name, "content": None, "parent": None},
+    ]
+    root = 0
+    part: int | None = None
+    subpart: int | None = None
+    chapter: int | None = None
+    section: int | None = None
 
-    def _split_multi_article_lines(lines: list[str]) -> list[str]:
-        """将一行中的多条法条拆分为独立行"""
-        result: list[str] = []
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
-                result.append("")
-                continue
-            if CHAPTER_PATTERN.match(stripped) or SECTION_PATTERN.match(stripped) or stripped in ("序 言", "目 录"):
-                result.append(stripped)
-                continue
+    preamble_active = False
+    preamble_buf: list[str] = []
 
-            parts = list(ARTICLE_SPLIT_PATTERN.finditer(stripped))
-            if not parts:
-                result.append(stripped)
-                continue
+    def flush_preamble() -> None:
+        nonlocal preamble_active
+        text = "".join(preamble_buf).strip()
+        if text:
+            nodes.append(
+                {"node_type": "preamble", "number": None, "title": None, "content": text, "parent": root},
+            )
+        preamble_buf.clear()
+        preamble_active = False
 
-            for match in parts:
-                start = match.start()
-                next_start = (
-                    parts[parts.index(match) + 1].start() if parts.index(match) + 1 < len(parts) else len(stripped)
-                )
-                segment = stripped[start:next_start].strip()
-                result.append(segment)
-        return result
+    def nearest(*candidates: int | None) -> int:
+        for c in candidates:
+            if c is not None:
+                return c
+        return root
 
-    lines = content.splitlines()
-    lines = _split_multi_article_lines(lines)
-    results: list[tuple[str, int, str]] = []
-    law_name = "中华人民共和国宪法"
-
-    # 跳过标题块 (第1-2行) 和目录 (到第一个 '第X章' 或 '序 言' 为止)
-    body_start = 0
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        if CHAPTER_PATTERN.match(stripped) or stripped == "序 言":
-            body_start = i
-            break
-
-    i = body_start
-    while i < len(lines):
-        stripped = lines[i].strip()
-        if not stripped:
-            i += 1
+    for raw in content.splitlines():
+        line = raw.strip()
+        if not line or STRUCT_RULE_PATTERN.match(line):
             continue
 
-        if stripped == "序 言":
-            # 序言正文从下一行开始, 积累到遇到下一章标题
-            preamble_parts: list[str] = []
-            i += 1
-            while i < len(lines):
-                stripped2 = lines[i].strip()
-                if not stripped2 or stripped2 == "目 录" or stripped2 == "序 言":
-                    i += 1
-                    continue
-                if CHAPTER_PATTERN.match(stripped2):
-                    break
-                preamble_parts.append(stripped2)
-                i += 1
-            if preamble_parts:
-                results.append((law_name, 0, "".join(preamble_parts)))
+        if _is_preamble_marker(line):
+            preamble_active = True
             continue
 
-        chapter_match = CHAPTER_PATTERN.match(stripped)
-        section_match = SECTION_PATTERN.match(stripped)
-        article_match = ARTICLE_PATTERN.match(stripped)
+        subpart_match = SUBPART_PATTERN.match(line)
+        part_match = None if subpart_match else PART_PATTERN.match(line)
+        chapter_match = CHAPTER_PATTERN.match(line)
+        section_match = SECTION_PATTERN.match(line)
+        article_match = ARTICLE_PATTERN.match(line)
+
+        if part_match:
+            flush_preamble()
+            part, subpart, chapter, section = len(nodes), None, None, None
+            nodes.append({
+                "node_type": "part",
+                "number": cn_to_int(part_match.group(1)),
+                "title": part_match.group(2).strip(),
+                "content": None,
+                "parent": root,
+            })
+            continue
+
+        if subpart_match:
+            flush_preamble()
+            subpart, chapter, section = len(nodes), None, None
+            nodes.append({
+                "node_type": "subpart",
+                "number": cn_to_int(subpart_match.group(1)),
+                "title": subpart_match.group(2).strip(),
+                "content": None,
+                "parent": nearest(part, root),
+            })
+            continue
+
+        if chapter_match:
+            flush_preamble()
+            chapter, section = len(nodes), None
+            nodes.append({
+                "node_type": "chapter",
+                "number": cn_to_int(chapter_match.group(1)),
+                "title": chapter_match.group(2).strip(),
+                "content": None,
+                "parent": nearest(subpart, part, root),
+            })
+            continue
+
+        if section_match:
+            flush_preamble()
+            section = len(nodes)
+            nodes.append({
+                "node_type": "section",
+                "number": cn_to_int(section_match.group(1)),
+                "title": section_match.group(2).strip(),
+                "content": None,
+                "parent": nearest(chapter, subpart, part, root),
+            })
+            continue
 
         if article_match:
-            article_cn = article_match.group(1)
-            article_num = cn_to_int(article_cn)
-            first_part = article_match.group(2)
-
-            article_content = first_part or ""
-            i += 1
-            # 继续收集后续行直到遇到下一章/节/条标题
-            while i < len(lines):
-                next_line = lines[i].strip()
-                if not next_line:
-                    i += 1
-                    continue
-                if (
-                    CHAPTER_PATTERN.match(next_line)
-                    or SECTION_PATTERN.match(next_line)
-                    or ARTICLE_PATTERN.match(next_line)
-                ):
-                    break
-                article_content += next_line
-                i += 1
-            results.append((law_name, article_num, article_content.strip()))
+            flush_preamble()
+            nodes.append({
+                "node_type": "article",
+                "number": cn_to_int(article_match.group(1)),
+                "title": None,
+                "content": article_match.group(2).strip(),
+                "parent": nearest(section, chapter, subpart, part, root),
+            })
             continue
 
-        if chapter_match or section_match:
-            i += 1
-            continue
+        # 非标题正文: 序言累积, 或作为上一条法条的续行
+        if preamble_active:
+            preamble_buf.append(line)
+        elif nodes[-1]["node_type"] == "article":
+            nodes[-1]["content"] = (nodes[-1]["content"] or "") + line
 
-        i += 1
-
-    return results
-
-
-def parse_content(content: str, law_name_override: str | None = None) -> list[tuple[str, int, str]]:
-    """自动判断格式并解析法律全文
-
-    Returns:
-        [(law_name, article_number, content), ...]
-
-    """
-    if content.strip().startswith("中华人民共和国宪法"):
-        return parse_format_a(content)
-
-    result = parse_format_b(content)
-    if result and law_name_override:
-        return [(law_name_override, num, content) for _, num, content in result]
-    return result
+    flush_preamble()
+    _assign_paths(nodes)
+    return nodes
 
 
 def parse_multi_level(content: str) -> dict:
@@ -239,7 +246,10 @@ def parse_multi_level(content: str) -> dict:
     preamble_parts: list[str] = []
     preamble_active = False
 
+    parts: list[dict] = []
     chapters: list[dict] = []
+    current_part: dict | None = None
+    current_subpart: dict | None = None
     current_chapter: dict | None = None
     current_section: dict | None = None
     current_articles: list[dict] = []
@@ -275,52 +285,91 @@ def parse_multi_level(content: str) -> dict:
                 current_chapter.setdefault("sections", []).append(current_section)
             current_section = None
 
+    def _chapter_bucket() -> list[dict]:
+        """章应归入的容器: 分编 > 编 > 顶层 chapters。"""
+        if current_subpart is not None:
+            return current_subpart.setdefault("chapters", [])
+        if current_part is not None:
+            return current_part.setdefault("chapters", [])
+        return chapters
+
     def _flush_chapter() -> None:
         nonlocal current_chapter
         _flush_section()
         if current_chapter is not None:
-            if current_articles:
-                current_chapter["articles"] = list(current_articles)
-                current_articles.clear()
-            else:
-                current_chapter["articles"] = []
-            chapters.append(current_chapter)
+            current_chapter["articles"] = list(current_articles) if current_articles else []
+            current_articles.clear()
+            _chapter_bucket().append(current_chapter)
         current_chapter = None
+
+    def _flush_subpart() -> None:
+        nonlocal current_subpart
+        _flush_chapter()
+        if current_subpart is not None:
+            if current_part is not None:
+                current_part.setdefault("subparts", []).append(current_subpart)
+            current_subpart = None
+
+    def _flush_part() -> None:
+        nonlocal current_part
+        _flush_subpart()
+        if current_part is not None:
+            parts.append(current_part)
+        current_part = None
 
     def _is_heading(stripped: str) -> bool:
         return bool(
-            CHAPTER_PATTERN.match(stripped) or SECTION_PATTERN.match(stripped) or stripped == "序 言",
+            PART_PATTERN.match(stripped)
+            or SUBPART_PATTERN.match(stripped)
+            or CHAPTER_PATTERN.match(stripped)
+            or SECTION_PATTERN.match(stripped)
+            or stripped == "序 言",
         )
 
-    # Detect and skip table of contents
-    toc_end = 0
+    def _norm(s: str) -> str:
+        return s.replace(" ", "").replace("\u3000", "")
+
+    # Detect and skip table of contents (raw markitdown 常把目录整段列在正文前, 会与正文重复)
+    toc_end = -1
     for i, line in enumerate(lines):
-        stripped = line.strip()
-        if stripped in ("目 录", "目录"):
+        if _norm(line.strip()) == "目录":
             toc_end = i
             break
 
-    if toc_end > 0:
-        body_start = toc_end + 1
-        for j in range(toc_end + 1, len(lines)):
-            stripped = lines[j].strip()
-            if not stripped:
-                continue
-            if not _is_heading(stripped):
-                for k in range(j - 1, toc_end, -1):
-                    if lines[k].strip():
-                        body_start = k
-                        break
-                break
+    if toc_end >= 0:
+        # 正文起点: 优先取第一条法条之前最后一个 "第X编" (编级正文的开头), 避免落进目录内层
+        first_article_idx = next(
+            (i for i in range(toc_end + 1, len(lines)) if ARTICLE_HEADING_PAT.match(lines[i].strip())),
+            len(lines),
+        )
+        part_idx = [i for i in range(toc_end + 1, first_article_idx) if PART_PATTERN.match(lines[i].strip())]
+        if part_idx:
+            body_start = max(part_idx)
+        else:
+            # 无编: 沿用"目录后第一个非标题行前的最后一个标题行"启发式 (兼容宪法序言)
+            body_start = toc_end + 1
+            for j in range(toc_end + 1, len(lines)):
+                stripped = lines[j].strip()
+                if not stripped:
+                    continue
+                if not _is_heading(stripped):
+                    for k in range(j - 1, toc_end, -1):
+                        if lines[k].strip():
+                            body_start = k
+                            break
+                    break
         body_lines = lines[body_start:]
     else:
         body_lines = lines
 
     # Line splitting pattern: only split on article and chapter boundaries
     # Section headings naturally appear on their own lines, so we don't split on 第X节
-    _line_split_pattern = re.compile(r"(第[零一二三四五六七八九十百千]+(?:条|章))")
+    _line_split_pattern = re.compile(r"(第[零一二三四五六七八九十百千]+(?:条|章))\s+")
 
     # Split lines that contain multiple articles/chapters on the same line
+    # Only splits when the first 第X条/第X章 is at line start (preceded only by whitespace).
+    # Cross-references like "依据本法第十一条规定" won't match because they're not at position 0,
+    # so the whole line stays intact — the main loop's N+1 increment check handles the rest.
     def _split_multi_articles(lines_input: list[str]) -> list[str]:
         result: list[str] = []
         for line in lines_input:
@@ -329,38 +378,38 @@ def parse_multi_level(content: str) -> dict:
                 result.append("")
                 continue
 
-            parts = list(_line_split_pattern.finditer(stripped))
-            if not parts:
+            matches = list(_line_split_pattern.finditer(stripped))
+            if not matches:
                 result.append(stripped)
                 continue
 
-            for idx_match, match in enumerate(parts):
+            # Only split when the first pattern match is at line start
+            if matches[0].start() != 0:
+                result.append(stripped)
+                continue
+
+            for idx_match, match in enumerate(matches):
                 start = match.start()
-                next_start = parts[idx_match + 1].start() if idx_match + 1 < len(parts) else len(stripped)
-                segment = stripped[start:next_start].strip()
-                result.append(segment)
+                next_start = matches[idx_match + 1].start() if idx_match + 1 < len(matches) else len(stripped)
+                result.append(stripped[start:next_start])
         return result
 
     body_lines = _split_multi_articles(body_lines)
 
     def _is_likely_heading(stripped: str) -> tuple[bool, str]:
-        """Check if a line starting with 第X章/节 looks like a real heading or article text."""
-        ch_m = CHAPTER_PATTERN.match(stripped)
-        if ch_m:
-            title = ch_m.group(2).strip()
-            if not title:
-                return False, ""
-            if title[0] in "的第之中。，、；":
-                return False, ""
-            return True, "chapter"
-        sec_m = SECTION_PATTERN.match(stripped)
-        if sec_m:
-            title = sec_m.group(2).strip()
-            if not title:
-                return False, ""
-            if title[0] in "的第之中。，、；":
-                return False, ""
-            return True, "section"
+        """判断以 第X编/分编/章/节 开头的行是真标题还是正文引用。"""
+        for pattern, kind in (
+            (SUBPART_PATTERN, "subpart"),
+            (PART_PATTERN, "part"),
+            (CHAPTER_PATTERN, "chapter"),
+            (SECTION_PATTERN, "section"),
+        ):
+            m = pattern.match(stripped)
+            if m:
+                title = m.group(2).strip()
+                if not title or title[0] in "的第之中。，、；":
+                    return False, ""
+                return True, kind
         return False, ""
 
     for line in body_lines:
@@ -391,7 +440,19 @@ def parse_multi_level(content: str) -> dict:
 
         if is_heading:
             _flush_article()
-            if heading_type == "chapter":
+            if heading_type == "part":
+                _flush_part()
+                m = PART_PATTERN.match(stripped)
+                if m is None:
+                    continue
+                current_part = {"number": cn_to_int(m.group(1)), "title": m.group(2).strip()}
+            elif heading_type == "subpart":
+                _flush_subpart()
+                m = SUBPART_PATTERN.match(stripped)
+                if m is None:
+                    continue
+                current_subpart = {"number": cn_to_int(m.group(1)), "title": m.group(2).strip()}
+            elif heading_type == "chapter":
                 _flush_chapter()
                 ch_m = CHAPTER_PATTERN.match(stripped)
                 if ch_m is None:
@@ -413,14 +474,26 @@ def parse_multi_level(content: str) -> dict:
 
         if art_m:
             art_num = cn_to_int(art_m.group(1))
-            if article_number is not None and art_num <= article_number:
-                article_buffer.append(stripped)
+            has_space_after = bool(ARTICLE_HEADING_PAT.match(line))
+
+            if article_number is not None:
+                # Inside active article: only accept immediately next number + heading spacing
+                if art_num == article_number + 1 and has_space_after:
+                    _flush_article()
+                    article_number = art_num
+                    first_part = art_m.group(2)
+                    if first_part:
+                        article_buffer.append(first_part)
+                else:
+                    article_buffer.append(stripped)
                 continue
-            _flush_article()
-            article_number = art_num
-            first_part = art_m.group(2)
-            if first_part:
-                article_buffer.append(first_part)
+
+            # No active article yet: use spacing heuristic to guard against cross-refs
+            if has_space_after:
+                article_number = art_num
+                first_part = art_m.group(2)
+                if first_part:
+                    article_buffer.append(first_part)
             continue
 
         if article_number is not None:
@@ -428,6 +501,7 @@ def parse_multi_level(content: str) -> dict:
             continue
 
     _flush_article()
+    _flush_part()
     _flush_chapter()
 
     if current_articles and current_chapter is None:
@@ -438,9 +512,11 @@ def parse_multi_level(content: str) -> dict:
         "preamble": "".join(preamble_parts).strip() if preamble_parts else None,
     }
 
+    if parts:
+        result["parts"] = parts
     if chapters:
         result["chapters"] = chapters
-    elif top_level_articles:
+    if not parts and not chapters and top_level_articles:
         result["articles"] = top_level_articles
 
     return result
@@ -481,22 +557,27 @@ def write_structured_law(
     if preamble:
         lines.extend(("序  言", "", preamble, ""))
 
-    for chapter in parsed.get("chapters", []):
-        ch_num = chapter["number"]
-        ch_title = chapter["title"]
-        lines.extend((f"第{_format_num(ch_num)}章  {ch_title}", ""))
-
+    def _write_chapter(chapter: dict) -> None:
+        lines.extend((f"第{_format_num(chapter['number'])}章  {chapter['title']}", ""))
         for section in chapter.get("sections", []):
-            sec_num = section["number"]
-            sec_title = section["title"]
-            lines.extend((f"    第{_format_num(sec_num)}节  {sec_title}", ""))
-
+            lines.extend((f"    第{_format_num(section['number'])}节  {section['title']}", ""))
             for art in section.get("articles", []):
                 lines.extend((f"    第{_format_num(art['number'])}条  {art['content']}", ""))
-
-        for art in chapter.get("articles", []):
-            if not chapter.get("sections"):
+        if not chapter.get("sections"):
+            for art in chapter.get("articles", []):
                 lines.extend((f"    第{_format_num(art['number'])}条  {art['content']}", ""))
+
+    for part in parsed.get("parts", []):
+        lines.extend((f"第{_format_num(part['number'])}编  {part['title']}", ""))
+        for subpart in part.get("subparts", []):
+            lines.extend((f"第{_format_num(subpart['number'])}分编  {subpart['title']}", ""))
+            for chapter in subpart.get("chapters", []):
+                _write_chapter(chapter)
+        for chapter in part.get("chapters", []):
+            _write_chapter(chapter)
+
+    for chapter in parsed.get("chapters", []):
+        _write_chapter(chapter)
 
     for art in parsed.get("articles", []):
         lines.extend((f"第{_format_num(art['number'])}条  {art['content']}", ""))
@@ -506,31 +587,28 @@ def write_structured_law(
 
 
 def _format_num(n: int) -> str:
-    """Format a number using Chinese numerals for single-level use."""
-    digits = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
-    if n <= 10:
-        return digits[n]
-    if n < 20:
-        return f"十{digits[n - 10]}"
-    if n < 100:
-        tens = n // 10
-        ones = n % 10
-        if ones == 0:
-            return f"{digits[tens]}十"
-        return f"{digits[tens]}十{digits[ones]}"
-    if n < 1000:
-        hundreds = n // 100
-        rest = n % 100
-        result = f"{digits[hundreds]}百"
-        if rest == 0:
-            return result
-        if rest <= 10:
-            return f"{result}零{digits[rest]}"
-        if rest < 20:
-            return f"{result}一十{digits[rest - 10]}" if rest > 10 else f"{result}一十"
-        tens = rest // 10
-        ones = rest % 10
-        if ones == 0:
-            return f"{result}{digits[tens]}十"
-        return f"{result}{digits[tens]}十{digits[ones]}"
-    return str(n)
+    """将整数转为中文数字 (支持 1-9999, 与 ``cn_to_int`` 可逆)。"""
+    if n <= 0:
+        return "零"
+    if n >= 10000:
+        return str(n)
+    digits = "零一二三四五六七八九"
+    units = ["", "十", "百", "千"]
+    s = str(n)
+    length = len(s)
+    result = ""
+    pending_zero = False
+    for i, ch in enumerate(s):
+        d = int(ch)
+        pos = length - i - 1
+        if d == 0:
+            pending_zero = True
+            continue
+        if pending_zero:
+            result += "零"
+            pending_zero = False
+        result += digits[d] + units[pos]
+    # 中文习惯: 10-19 写作 "十X" 而非 "一十X"
+    if result.startswith("一十"):
+        result = result[1:]
+    return result

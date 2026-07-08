@@ -146,6 +146,10 @@ class LawArticleResponse(BaseModel):
     law_name: str
     article_number: int
     content: str
+    chapter_number: int | None = None
+    chapter_title: str | None = None
+    section_number: int | None = None
+    section_title: str | None = None
 
 
 class LawArticleListResponse(StatusResponse):
@@ -158,3 +162,8 @@ class LawArticleDetailResponse(StatusResponse):
 
 class LawListResponse(StatusResponse):
     laws: list[dict[str, Any]]
+
+
+class LawTocResponse(StatusResponse):
+    law_name: str
+    toc: list[dict[str, Any]]

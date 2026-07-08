@@ -90,6 +90,7 @@ async def run_content_download(
     *,
     structured_dir: str | Path | None = None,
     download_dir: str | Path | None = None,
+    raw_dir: str | Path | None = None,
     category: str | None = None,
 ) -> list[dict]:
     """Run the Scrapy content download spider that downloads, converts, and parses laws.
@@ -100,9 +101,11 @@ async def run_content_download(
 
     download_path = Path(download_dir or env_settings.DATA_ROOT / "downloaded_laws")
     structured_path = Path(structured_dir or env_settings.DATA_ROOT / "structured_laws")
+    raw_path = Path(raw_dir or env_settings.DATA_ROOT / "raw_laws")
 
     manifest_path = download_path / ".manifest.json"
     settings["LAW_CONTENT_DOWNLOAD_DIR"] = download_path
+    settings["LAW_CONTENT_RAW_DIR"] = raw_path
     settings["LAW_CONTENT_STRUCTURED_DIR"] = structured_path
     settings["LAW_CONTENT_MANIFEST_PATH"] = manifest_path
 

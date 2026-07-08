@@ -35,7 +35,7 @@ async def search_documents_base(
     data = []
     for i, doc in enumerate(docs):
         score = doc.query_score if doc.query_score is not None else 0.0
-        source = doc.name or "unknown"
+        source = doc.page_index or doc.name or "unknown"
         preview = doc.content[:300] + "..." if len(doc.content) > 300 else doc.content
         data.append({
             "#": offset + i + 1,
@@ -69,7 +69,11 @@ async def search_law_articles_base(
         article = await page_index.aget_by_law_article(law_name=law_name, article_number=article_number)
         if article is None:
             return f"未找到法律 '{law_name}' 第{article_number}条"
-        return f"## {law_name} 第{article_number}条\n\n{article['content']}"
+        location = _format_location(article)
+        header = f"## {law_name} 第{article_number}条"
+        if location:
+            header += f"\n\n> {location}"
+        return f"{header}\n\n{article['content']}"
 
     if query:
         articles = await page_index.asearch_articles(law_name=law_name, query=query, limit=limit)
@@ -89,6 +93,7 @@ async def search_law_articles_base(
     for a in articles:
         preview = a["content"][:300] + "..." if len(a["content"]) > 300 else a["content"]
         data.append({
+            "章/节": _format_location(a) or "-",
             "条号": f"第{a['article_number']}条",
             "内容": preview,
         })
@@ -100,6 +105,55 @@ async def search_law_articles_base(
     dff = pd.DataFrame(data)
     md += dff.to_markdown(index=False)
     return md
+
+
+def _format_location(article: dict) -> str:
+    """由法条 dict 的章/节字段构造 '第X章 标题 / 第Y节 标题' 定位串。"""
+    parts: list[str] = []
+    if article.get("chapter_number") is not None:
+        parts.append(f"第{article['chapter_number']}章 {article.get('chapter_title') or ''}".strip())
+    if article.get("section_number") is not None:
+        parts.append(f"第{article['section_number']}节 {article.get('section_title') or ''}".strip())
+    return " / ".join(parts)
+
+
+async def get_law_toc_base(law_name: str) -> str:
+    toc = await page_index.aget_law_toc(law_name=law_name)
+    if not toc:
+        return f"法律 '{law_name}' 暂无章节目录 (可能未导入或该法律不分章)。"
+    unit = {"part": "编", "subpart": "分编", "chapter": "章", "section": "节"}
+    lines = [f"## {law_name} 目录"]
+
+    def _walk(nodes: list[dict], depth: int) -> None:
+        for node in nodes:
+            u = unit.get(node["node_type"], "")
+            num = f"第{node['number']}{u}" if node.get("number") is not None else u
+            lines.append(f"{'    ' * depth}- {num} {node.get('title') or ''}".rstrip())
+            children = node.get("children") or []
+            if children:
+                _walk(children, depth + 1)
+
+    _walk(toc, 0)
+    return "\n".join(lines)
+
+
+async def get_articles_under_chapter_base(law_name: str, chapter_title: str, limit: int = 200) -> str:
+    articles = await page_index.aget_articles_under_chapter(
+        law_name=law_name,
+        chapter_title=chapter_title,
+        limit=limit,
+    )
+    if not articles:
+        return f"未在 '{law_name}' 中找到章 '{chapter_title}' 下的法条。"
+    data = [
+        {
+            "条号": f"第{a['article_number']}条",
+            "内容": a["content"][:300] + ("..." if len(a["content"]) > 300 else ""),
+        }
+        for a in articles
+    ]
+    md = f"## {law_name} · {chapter_title}\n\n共 {len(articles)} 条\n\n"
+    return md + pd.DataFrame(data).to_markdown(index=False)
 
 
 @cache

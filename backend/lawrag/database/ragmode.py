@@ -10,8 +10,41 @@ from lawrag.documents.models import Document
 from lawrag.documents.tokenizer import atokenize_document
 
 from .database import DatabaseManager
-from .tables import DocumentTable, LawArticle
+from .tables import DocumentTable, LawNode
 from .types import BM25Vector
+
+_NODE_LABEL_UNIT = {
+    "part": "编",
+    "subpart": "分编",
+    "chapter": "章",
+    "section": "节",
+    "article": "条",
+}
+
+
+def _node_label(node: LawNode) -> str:
+    """单个节点在面包屑中的展示文本。"""
+    if node.node_type == "law":
+        return node.law_name
+    if node.node_type == "preamble":
+        return "序言"
+    unit = _NODE_LABEL_UNIT.get(node.node_type, "")
+    head = f"第{node.number}{unit}" if node.number is not None else unit
+    return f"{head} {node.title}".strip() if node.title else head
+
+
+def _node_breadcrumb(node: LawNode, node_map: dict[UUID, LawNode]) -> str:
+    """沿 parent_id 上溯构造多级 page index 面包屑,
+    例如 '民法典 > 第一编 总则 > 第二章 自然人 > 第一节 ... > 第十三条'。
+    """
+    labels: list[str] = []
+    current: LawNode | None = node
+    seen: set[UUID] = set()
+    while current is not None and current.id not in seen:
+        seen.add(current.id)
+        labels.append(_node_label(current))
+        current = node_map.get(current.parent_id) if current.parent_id is not None else None
+    return " > ".join(reversed(labels))
 
 
 class RAGMode:
@@ -73,13 +106,19 @@ class RAGMode:
         sorted_ids = sorted(scores.items(), key=itemgetter(1), reverse=True)
         return [doc_id for doc_id, _ in sorted_ids[:topn]]
 
-    async def _get_law_name(self, law_id: UUID | None, session) -> str | None:
-        if law_id is None:
-            return None
-        stmt = select(col(LawArticle.law_name)).where(col(LawArticle.id) == law_id)
-        result = await session.execute(stmt)
-        row = result.first()
-        return row[0] if row else None
+    @staticmethod
+    async def _load_nodes_with_ancestors(node_ids: list[UUID], session) -> dict[UUID, LawNode]:
+        """加载给定节点及其全部祖先 (沿 parent_id 逐层上溯)。"""
+        node_map: dict[UUID, LawNode] = {}
+        pending: set[UUID] = set(node_ids)
+        while pending:
+            rows = (await session.execute(select(LawNode).where(col(LawNode.id).in_(pending)))).scalars().all()
+            pending = set()
+            for node in rows:
+                node_map[node.id] = node
+                if node.parent_id is not None and node.parent_id not in node_map:
+                    pending.add(node.parent_id)
+        return node_map
 
     async def _fetch_documents(self, doc_ids: list[UUID], session) -> list[Document]:
         if not doc_ids:
@@ -87,14 +126,22 @@ class RAGMode:
         stmt = select(DocumentTable).where(col(DocumentTable.id).in_(doc_ids))
         result = await session.execute(stmt)
         rows = result.scalars().all()
-        return [
-            Document(
-                content=row.content or "",
-                name=await self._get_law_name(row.law_id, session),
-                id=row.id,
+
+        node_ids = [row.node_id for row in rows if row.node_id is not None]
+        node_map = await self._load_nodes_with_ancestors(node_ids, session)
+
+        documents: list[Document] = []
+        for row in rows:
+            node = node_map.get(row.node_id) if row.node_id is not None else None
+            documents.append(
+                Document(
+                    content=row.content or "",
+                    name=node.law_name if node else None,
+                    page_index=_node_breadcrumb(node, node_map) if node else None,
+                    id=row.id,
+                ),
             )
-            for row in rows
-        ]
+        return documents
 
     async def ahyprid_search(
         self,
@@ -150,11 +197,12 @@ class RAGMode:
         async with self.__db.asession() as session:
             stmt = (
                 select(
-                    col(LawArticle.law_name),
-                    count(col(LawArticle.id)).label("count"),
+                    col(LawNode.law_name),
+                    count(col(LawNode.id)).label("count"),
                 )
-                .group_by(col(LawArticle.law_name))
-                .order_by(col(LawArticle.law_name))
+                .where(col(LawNode.node_type) == "article")
+                .group_by(col(LawNode.law_name))
+                .order_by(col(LawNode.law_name))
             )
             result = await session.execute(stmt)
             return [{"law_name": row[0], "article_count": row[1]} for row in result.fetchall()]

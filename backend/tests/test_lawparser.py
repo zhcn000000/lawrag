@@ -1,6 +1,46 @@
 import pytest
 
-from lawrag.documents.lawparser import cn_to_int, parse_content, parse_format_a, parse_format_b
+from lawrag.documents.lawparser import cn_to_int, parse_multi_level, parse_structured_law
+
+STRUCTURED_LAW = "\n".join([
+    "=" * 60,
+    "中华人民共和国测试法",
+    "=" * 60,
+    "",
+    "第一编  总则",
+    "",
+    "第一章  基本规定",
+    "",
+    "    第一条  为了保护测试主体的合法权益，根据宪法，制定本法。",
+    "",
+    "    第二条  测试法调整测试关系。",
+    "",
+    "第二编  权利",
+    "",
+    "第一分编  人身权利",
+    "",
+    "第二章  权利总则",
+    "",
+    "    第一节  一般规定",
+    "",
+    "    第三条  测试主体依法享有测试权利。",
+    "",
+    "    第二节  特别规定",
+    "",
+    "    第四条  测试活动应当遵循自愿原则。",
+    "",
+])
+
+TOP_LEVEL_LAW = "\n".join([
+    "=" * 60,
+    "中华人民共和国简法",
+    "=" * 60,
+    "",
+    "第一条  简法第一条。",
+    "",
+    "第二条  简法第二条。",
+    "",
+])
 
 
 @pytest.mark.parametrize(
@@ -21,77 +61,156 @@ def test_cn_to_int(cn: str, expected: int) -> None:
     assert cn_to_int(cn) == expected
 
 
-def test_parse_format_b_single_line() -> None:
-    """Test parsing a single standard law article line"""
-    line = "《中华人民共和国民法典》第一条规定，为了保护民事主体的合法权益，根据宪法，制定本法。"
-    results = parse_format_b(line)
-    assert len(results) == 1
-    assert results[0][0] == "中华人民共和国民法典"
-    assert results[0][1] == 1
-    assert results[0][2] == "为了保护民事主体的合法权益，根据宪法，制定本法"
+def test_parse_structured_root_and_counts() -> None:
+    nodes = parse_structured_law(STRUCTURED_LAW, law_name="中华人民共和国测试法")
+    assert nodes[0]["node_type"] == "law"
+    assert nodes[0]["parent"] is None
+    assert nodes[0]["title"] == "中华人民共和国测试法"
+
+    types = [n["node_type"] for n in nodes]
+    assert types.count("part") == 2
+    assert types.count("subpart") == 1
+    assert types.count("chapter") == 2
+    assert types.count("section") == 2
+    assert types.count("article") == 4
 
 
-def test_parse_format_b_multiple_lines() -> None:
-    """Test parsing multiple standard law article lines"""
-    content = "\n".join([
-        "《中华人民共和国民法典》第一条规定，为了保护民事主体的合法权益，根据宪法，制定本法。",
-        "《中华人民共和国民法典》第二条规定，民法调整平等主体的自然人、法人和非法人组织之间的人身关系和财产关系。",
-        "《中华人民共和国民法典》第三条规定，民事主体的人身权利、财产权利以及其他合法权益受法律保护。",
-    ])
-    results = parse_format_b(content)
-    assert len(results) == 3
-    assert results[0][1] == 1
-    assert results[1][1] == 2
-    assert results[2][1] == 3
+def test_parse_structured_paths_unique() -> None:
+    nodes = parse_structured_law(STRUCTURED_LAW, law_name="中华人民共和国测试法")
+    paths = [n["path"] for n in nodes]
+    assert len(paths) == len(set(paths))
 
 
-def test_parse_format_b_empty() -> None:
-    assert parse_format_b("") == []
-    assert parse_format_b("   \n   \n") == []
+def test_parse_structured_hierarchy() -> None:
+    nodes = parse_structured_law(STRUCTURED_LAW, law_name="中华人民共和国测试法")
+
+    # 第三条 → 第一节 → 第二章 → 第一分编 → 第二编 → law
+    art3 = next(n for n in nodes if n["node_type"] == "article" and n["number"] == 3)
+    section = nodes[art3["parent"]]
+    assert section["node_type"] == "section"
+    assert section["title"] == "一般规定"
+    chapter = nodes[section["parent"]]
+    assert chapter["node_type"] == "chapter"
+    assert chapter["title"] == "权利总则"
+    subpart = nodes[chapter["parent"]]
+    assert subpart["node_type"] == "subpart"
+    assert subpart["title"] == "人身权利"
+    part = nodes[subpart["parent"]]
+    assert part["node_type"] == "part"
+    assert part["title"] == "权利"
+
+    # 第一条 → 第一章 → 第一编 (无分编/节)
+    art1 = next(n for n in nodes if n["node_type"] == "article" and n["number"] == 1)
+    chapter1 = nodes[art1["parent"]]
+    assert chapter1["node_type"] == "chapter"
+    assert chapter1["title"] == "基本规定"
+    assert nodes[chapter1["parent"]]["node_type"] == "part"
+    assert nodes[chapter1["parent"]]["title"] == "总则"
 
 
-def test_parse_content_auto_format_b() -> None:
-    """Test auto-detection: format B (standard law)"""
-    content = "\n".join([
-        "《中华人民共和国反家庭暴力法》第一条规定，为了预防和制止家庭暴力，保护家庭成员的合法权益，制定本法。",
-        "《中华人民共和国反家庭暴力法》第二条规定，本法所称家庭暴力，是指家庭成员之间以殴打、捆绑、残害、限制人身自由以及经常性谩骂、恐吓等方式实施的身体、精神等侵害行为。",
-    ])
-    results = parse_content(content)
-    assert len(results) == 2
-    assert results[0][0] == "中华人民共和国反家庭暴力法"
+def test_parse_structured_top_level_articles() -> None:
+    nodes = parse_structured_law(TOP_LEVEL_LAW, law_name="中华人民共和国简法")
+    articles = [n for n in nodes if n["node_type"] == "article"]
+    assert len(articles) == 2
+    # 无编/章时法条直接挂在根节点下
+    for art in articles:
+        assert nodes[art["parent"]]["node_type"] == "law"
 
 
-def test_parse_format_a_constitution() -> None:
-    """Test parsing constitution format (format A)"""
+# ── parse_multi_level tests ──────────────────────────────────────────
+
+
+def test_parse_multi_simple() -> None:
+    content = "中华人民共和国测试法\n第一章  总则\n第一条  第一条内容。\n第二条  第二条内容。\n"
+    parsed = parse_multi_level(content)
+    assert parsed["law_name"] == "中华人民共和国测试法"
+    assert parsed["chapters"][0]["articles"][0]["number"] == 1
+
+
+def test_parse_multi_backward_cross_ref() -> None:
+    """引用前文：第117条中引用第11条 → 不应拆为新条目"""
     content = (
-        "中华人民共和国宪法（1982年12月4日通过）\n"
-        "目 录\n"
-        "序 言\n"
-        "第一章 总 纲\n"
-        "序 言\n"
-        "中国是世界上历史最悠久的国家之一。\n"
-        "第一章 总 纲\n"
-        "第一条 中华人民共和国是工人阶级领导的、以工农联盟为基础的人民民主专政的社会主义国家。\n"
-        "第二条 中华人民共和国的一切权力属于人民。\n"
+        "中华人民共和国测试法\n"
+        "第一百一十七条  违反本法\n"
+        "第十一条  第二款规定，追究责任。\n"
+        "第一百一十八条  下一条内容。\n"
     )
-    results = parse_format_a(content)
-    assert len(results) >= 2
-    law_names = {r[0] for r in results}
-    assert "中华人民共和国宪法" in law_names
-    article_nums = {r[1] for r in results}
-    assert 0 in article_nums  # 序言 = article_number 0
-    assert 1 in article_nums
-    assert 2 in article_nums
+    parsed = parse_multi_level(content)
+    arts = parsed["articles"]
+    assert len(arts) == 2
+    assert arts[0]["number"] == 117
+    assert "第十一条" in arts[0]["content"]
+    assert arts[1]["number"] == 118
 
 
-def test_parse_content_auto_format_a() -> None:
-    """Test auto-detection: format A (constitution)"""
+def test_parse_multi_forward_cross_ref() -> None:
+    """引用后文(条号非N+1)：第44条中引用第56条 → 不应拆为新条目"""
     content = (
-        "中华人民共和国宪法（1982年12月4日通过）\n"
-        "目 录\n"
-        "第一章 总 纲\n"
-        "第一条 中华人民共和国是工人阶级领导的、以工农联盟为基础的人民民主专政的社会主义国家。\n"
+        "中华人民共和国测试法\n"
+        "第一章  分则\n"
+        "第四十四条  参照第五十六条规定执行。\n"
+        "第四十五条  下一条。\n"
+        "第二章  附则\n"
+        "第五十六条  第五十六条正文。\n"
     )
-    results = parse_content(content)
-    assert len(results) >= 1
-    assert results[0][0] == "中华人民共和国宪法"
+    parsed = parse_multi_level(content)
+    ch1 = parsed["chapters"][0]["articles"]
+    assert ch1[0]["number"] == 44
+    assert "第五十六条" in ch1[0]["content"]
+    ch2 = parsed["chapters"][1]["articles"]
+    assert ch2[0]["number"] == 56
+
+
+def test_parse_multi_inline_ref_not_split() -> None:
+    """行内引用(条后无空格)不被_split_multi_articles拆分"""
+    content = "中华人民共和国测试法\n第一百一十七条  违反本法第十一条第二款规定，追究责任。\n第一百一十八条  下一条。\n"
+    parsed = parse_multi_level(content)
+    arts = parsed["articles"]
+    assert len(arts) == 2
+    assert "第十一条第二款" in arts[0]["content"]
+
+
+def test_parse_multi_content_starts_with_ref() -> None:
+    """法条正文以引用条目开头时(如'第一条  第一条内容')不误判"""
+    content = (
+        "中华人民共和国测试法\n第一条  第一条内容参照本法第三条规定。\n第二条  第二条内容。\n第三条  第三条正文。\n"
+    )
+    parsed = parse_multi_level(content)
+    arts = parsed["articles"]
+    assert len(arts) == 3
+    assert arts[0]["number"] == 1
+    assert "第三条" in arts[0]["content"]
+
+
+def test_parse_multi_empty() -> None:
+    assert parse_multi_level("") == {"law_name": "", "preamble": None}
+
+
+def test_parse_multi_parts_and_toc() -> None:
+    """含目录(编/分编/章)且正文重复目录时: 跳过目录, 仅解析正文, 并还原编/分编层级。"""
+    content = "\n".join([
+        "中华人民共和国测试法典",
+        "目　　录",
+        "第一编　总　　则",
+        "第一章　基本规定",
+        "第二编　物　　权",
+        "第一分编　通　　则",
+        "第一章　一般规定",
+        "第一编　总　　则",  # 正文开始 (重复)
+        "第一章　基本规定",
+        "第一条　总则第一条。",
+        "第二编　物　　权",
+        "第一分编　通　　则",
+        "第一章　一般规定",
+        "第二条　物权第一条。",
+    ])
+    parsed = parse_multi_level(content)
+    assert "parts" in parsed
+    assert len(parsed["parts"]) == 2
+    p1, p2 = parsed["parts"]
+    assert p1["title"] == "总　　则"
+    # 第一编 下有直接章, 第一条 在其中
+    assert p1["chapters"][0]["articles"][0]["number"] == 1
+    # 第二编 下有分编, 分编下有章
+    assert p2["subparts"][0]["title"] == "通　　则"
+    assert p2["subparts"][0]["chapters"][0]["articles"][0]["number"] == 2

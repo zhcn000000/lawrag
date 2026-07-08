@@ -19,7 +19,7 @@ class DocumentStore:
     async def _ingest_document(
         self,
         document: Document,
-        law_id: UUID,
+        node_id: UUID,
         chunk_size: int = 512,
         chunk_overlap: int = 32,
     ) -> list[UUID]:
@@ -42,7 +42,7 @@ class DocumentStore:
                 stmt = (
                     insert(DocumentTable)
                     .values(
-                        law_id=law_id,
+                        node_id=node_id,
                         content=chunk.content,
                         vector=embeddings_i,
                         bmvector=dict(bmvector),
@@ -57,7 +57,7 @@ class DocumentStore:
     async def aload_from_text(
         self,
         content: str,
-        law_id: UUID,
+        node_id: UUID,
         name: str | None = None,
         chunk_size: int = 4096,
         chunk_overlap: int = 128,
@@ -65,7 +65,7 @@ class DocumentStore:
         document = Document(content=content, name=name)
         return await self._ingest_document(
             document=document,
-            law_id=law_id,
+            node_id=node_id,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
         )
@@ -78,10 +78,10 @@ class DocumentStore:
     ) -> int:
         all_chunks: list[tuple[UUID, str]] = []
 
-        for content, law_id, name in texts:
+        for content, node_id, name in texts:
             document = Document(content=content, name=name)
             async for chunk in asplit_document(document, chunk_size, chunk_overlap):
-                all_chunks.append((law_id, chunk.content))
+                all_chunks.append((node_id, chunk.content))
 
         if not all_chunks:
             return 0
@@ -90,11 +90,11 @@ class DocumentStore:
         embeddings = await aembed_documents(contents)
 
         insert_values: list[dict] = []
-        for i, (law_id, content) in enumerate(all_chunks):
+        for i, (node_id, content) in enumerate(all_chunks):
             bmvector = await atokenize_document(content)
             embeddings_i = embeddings[i] if i < len(embeddings) else []
             insert_values.append({
-                "law_id": law_id,
+                "node_id": node_id,
                 "content": content,
                 "vector": embeddings_i,
                 "bmvector": dict(bmvector),
@@ -112,7 +112,7 @@ class DocumentStore:
 
         return total
 
-    async def adelete_article_chunks(self, law_id: UUID) -> None:
+    async def adelete_article_chunks(self, node_id: UUID) -> None:
         async with self.__db.asession() as session:
-            await session.execute(delete(DocumentTable).where(col(DocumentTable.law_id) == law_id))
+            await session.execute(delete(DocumentTable).where(col(DocumentTable.node_id) == node_id))
             await session.commit()

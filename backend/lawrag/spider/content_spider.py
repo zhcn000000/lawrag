@@ -61,10 +61,23 @@ class ContentDownloadSpider(Spider):
         for entry in law_list:
             if self._category and entry.get("category") != self._category:
                 continue
+
             if entry.get("status") != "有效":
                 continue
-            if entry.get("law_type") not in {"法律", "宪法", "行政法规", "监察法规"}:
+
+            if entry.get("law_type") not in {
+                "宪法",
+                "法律",
+                # "行政法规",
+                # "监察法规",
+            }:
                 continue
+
+            if entry.get("law_type") == "宪法" and entry.get("law_name") != "中华人民共和国宪法（2018年修正文本）":
+                continue
+            else:
+                entry["law_name"] = "中华人民共和国宪法"
+
             if entry.get("law_name") in current_files:
                 logger.debug("Skipping already downloaded: %s", entry.get("law_name"))
                 continue

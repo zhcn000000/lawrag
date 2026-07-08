@@ -1,7 +1,8 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import delete, insert
+from sqlalchemy import delete
+from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import col
 
 from lawrag.documents.embedder import aembed_documents

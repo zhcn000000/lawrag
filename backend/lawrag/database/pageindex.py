@@ -1,11 +1,11 @@
 import logging
 from itertools import starmap
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import UUID, uuid7
 
 from anyio import Path as AsyncPath
 from sqlalchemy import delete, exists, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.functions import count
 from sqlmodel import col
@@ -92,7 +92,7 @@ class LawPageIndex:
         if articles == 0:
             return {"file": law_name, "status": "empty", "count": 0}
 
-        ids = [uuid4() for _ in nodes]
+        ids = [uuid7() for _ in nodes]
 
         _type_unit = {"part": "编", "subpart": "分编", "chapter": "章", "section": "节", "article": "条"}
 
@@ -134,10 +134,11 @@ class LawPageIndex:
         async with self.__db.asession() as session:
             # 重新导入前先清空该法律的所有节点, 保证幂等
             await session.execute(delete(LawNode).where(col(LawNode.law_name) == law_name))
-            # 单条 INSERT 内父节点先于子节点, 自引用外键在语句结束时校验通过;
-            # (law_name, path) 唯一约束 + ON CONFLICT DO NOTHING 兜底防止结构重复插入
-            stmt = pg_insert(LawNode).values(values)
-            stmt = stmt.on_conflict_do_nothing(index_elements=[col(LawNode.law_name), col(LawNode.path)])
+            stmt = (
+                insert(LawNode)
+                .values(values)
+                .on_conflict_do_nothing(index_elements=[col(LawNode.law_name), col(LawNode.path)])
+            )
             await session.execute(stmt)
             await session.commit()
 

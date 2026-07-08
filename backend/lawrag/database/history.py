@@ -4,7 +4,8 @@ from uuid import UUID
 
 import orjson
 from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.sql.functions import count
 from sqlmodel import col
 

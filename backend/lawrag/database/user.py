@@ -5,7 +5,8 @@ from uuid import UUID
 import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import col
 
 from lawrag.utils.environments import settings

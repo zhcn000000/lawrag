@@ -6,17 +6,17 @@ import LoginPage from "@/pages/LoginPage";
 import { store } from "@/store";
 
 export default function App() {
-	return (
-		<Provider store={store}>
-			<BrowserRouter>
-				<Routes>
-					<Route path="/login" element={<LoginPage />} />
-					<Route element={<MainLayout />}>
-						<Route path="/" element={<Navigate to="/chat" replace />} />
-						<Route path="/chat" element={<ChatPage />} />
-					</Route>
-				</Routes>
-			</BrowserRouter>
-		</Provider>
-	);
+  return (
+    <Provider store={store}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<Navigate to="/chat" replace />} />
+            <Route path="/chat" element={<ChatPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </Provider>
+  );
 }

@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
   const apiPort = env.FASTAPI_PORT || "40001";
 
   return {
+    base: "/webui/",
     plugins: [
       react({
         jsxImportSource: "@emotion/react",

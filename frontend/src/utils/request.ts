@@ -1,3 +1,5 @@
+import { navigate } from "./navigateRef";
+
 const BASE_URL = "/api";
 
 function getAuthHeaders(): Record<string, string> {
@@ -9,7 +11,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
   if (response.status === 401) {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    window.location.href = "/login";
+    navigate("/login", { replace: true });
     throw new Error("未登录或登录已过期");
   }
   if (!response.ok) {

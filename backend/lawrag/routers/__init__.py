@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 
@@ -24,9 +25,33 @@ app.include_router(rag_router, prefix="/api/rag", tags=["rag"])
 app.include_router(user_router, prefix="/api/users", tags=["users"])
 static_path = find_project_directory() / "static"
 if static_path.exists() and static_path.is_dir():
-    app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+    assets_path = static_path / "assets"
+    app.mount("/webui/assets", StaticFiles(directory=str(assets_path)), name="assets")
+
+    @app.get("/webui/favicon.svg", include_in_schema=False)
+    @app.get("/favicon.svg", include_in_schema=False)
+    async def serve_favicon():
+        return FileResponse(static_path / "favicon.svg")
+
+    @app.get("/webui/{path:path}", include_in_schema=False)
+    async def serve_webui(path: str):
+        return FileResponse(static_path / "index.html")
+
+else:
+
+    @app.get("/webui/{path:path}", include_in_schema=False)
+    async def serve_webui_nofound(path: str):
+        raise HTTPException(status_code=404, detail="Web UI not found")
+
 
 user_manager = UserManager()
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/webui", include_in_schema=False)
+@app.get("/webui/", include_in_schema=False)
+async def redirect_to_webui():
+    return RedirectResponse(url="/webui/index.html")
 
 
 @app.post("/api/login")

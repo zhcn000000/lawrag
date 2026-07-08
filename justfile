@@ -9,8 +9,8 @@ ui:
 
 build-ui:
   cd frontend && pnpm build
-  rm -rf backend/static
-  cp -r frontend/dist backend/static
+  rm -rf static
+  cp -r frontend/dist static
 
 database:
   cd docker && podman-compose up database

@@ -1,15 +1,16 @@
 import { css, Global } from "@emotion/react";
 import { App as AntApp, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
-import { StrictMode } from "react";
+import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { Provider } from "react-redux";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import ChatPage from "./pages/ChatPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import { store } from "./store";
+import { setNavigate } from "./utils/navigateRef";
 
 const globalStyles = css`
   body {
@@ -50,6 +51,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RouterBridge() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    setNavigate(navigate);
+    return () => setNavigate(null);
+  }, [navigate]);
+  return null;
+}
+
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("Root element not found");
 createRoot(rootElement).render(
@@ -58,7 +68,8 @@ createRoot(rootElement).render(
     <Provider store={store}>
       <ConfigProvider locale={zhCN}>
         <AntApp>
-          <BrowserRouter>
+          <BrowserRouter basename="/webui">
+            <RouterBridge />
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route

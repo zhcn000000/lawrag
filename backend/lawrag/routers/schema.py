@@ -134,7 +134,6 @@ ChatMessage = SystemMessageItem | UserMessageItem | AssistantMessageItem | ToolM
 
 class PageIndexImportRequest(BaseModel):
     path: str
-    category: str | None = None
 
 
 class PageIndexImportResponse(StatusResponse):

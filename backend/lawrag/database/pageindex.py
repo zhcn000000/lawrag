@@ -81,7 +81,6 @@ class LawPageIndex:
     async def aimport_file(
         self,
         file_path: str | Path | AsyncPath,
-        category: str | None = None,
     ) -> dict:
         path = AsyncPath(file_path)
         law_name = path.stem
@@ -123,10 +122,8 @@ class LawPageIndex:
                 "node_type": n["node_type"],
                 "number": n["number"],
                 "content": n["title"] or n["content"],
-                "order_index": i,
                 "path": n["path"],
                 "full_path": full_paths[i],
-                "category": category,
             }
             for i, n in enumerate(nodes)
         ]
@@ -148,7 +145,6 @@ class LawPageIndex:
     async def aimport_from_dir(
         self,
         dir_path: str | Path | AsyncPath,
-        category: str | None = None,
     ) -> list[dict]:
         path = AsyncPath(dir_path)
         if not await path.is_dir():
@@ -160,7 +156,7 @@ class LawPageIndex:
         for file_path in paths:
             if await file_path.is_file() and not file_path.name.startswith("."):
                 try:
-                    result = await self.aimport_file(file_path=file_path, category=category)
+                    result = await self.aimport_file(file_path=file_path)
                     results.append(result)
                 except Exception:
                     logger.exception("Failed to import %s", file_path)

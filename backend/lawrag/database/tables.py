@@ -105,17 +105,6 @@ class HistoryTable(SQLModel, table=True):
 
 
 class LawNode(SQLModel, table=True):
-    """法律的多级页面索引 (page index) 节点, 以自引用外键构成树状结构.
-
-    node_type 取值: "law"(根) / "preamble"(序言) / "part"(编) / "subpart"(分编)
-    / "chapter"(章) / "section"(节) / "article"(条).
-    - part/subpart/chapter/section/article/preamble 使用 content 存文本内容;
-    - number 为编/分编/章/节/条的序号 (中文数字转整数);
-    - order_index 保留原文顺序, 用于稳定排序与还原层级;
-    - path 为同一部法律内唯一的物化路径 (materialized path), 配合
-      (law_name, path) 唯一约束防止重复插入。
-    """
-
     __tablename__ = "law_nodes"
 
     id: Annotated[
@@ -159,11 +148,6 @@ class LawNode(SQLModel, table=True):
     @classmethod
     def __table_args__(cls) -> tuple:
         return (
-            Index(
-                "idx_law_nodes_law_name",
-                col(cls.law_name),
-            ),
-            # (law_name, path) 作为稳定的自然键, 防止同一结构节点重复插入
             Index(
                 "uq_law_nodes_law_name_path",
                 col(cls.law_name),

@@ -93,9 +93,9 @@ async def pageindex_import(
     if path is None:
         path = settings.DATA_ROOT / "structured_laws"
     if path.is_dir():
-        results = await pageindex.aimport_from_dir(dir_path=path, category=category)
+        results = await pageindex.aimport_from_dir(dir_path=path)
     else:
-        result = await pageindex.aimport_file(file_path=path, category=category)
+        result = await pageindex.aimport_file(file_path=path)
         results = [result]
     total = sum(r.get("count", 0) for r in results)
     ok = sum(1 for r in results if r.get("status") == "ok")
@@ -221,7 +221,8 @@ async def spider_crawl(
         Option("--category", "-c", help="Law category to crawl"),
     ] = "all",
     output: Annotated[
-        Path | None, Option("--output", "-o", help="Output JSON path (default: data/law_index/law_index.json)"),
+        Path | None,
+        Option("--output", "-o", help="Output JSON path (default: data/law_index/law_index.json)"),
     ] = None,
 ) -> None:
     """Stage 1: Crawl the NPC law database API to build a law index.
@@ -243,10 +244,12 @@ async def spider_crawl(
 async def spider_download(
     index_path: Annotated[Path | None, Argument(help="Path to law index JSON file from 'lawrag spider crawl'")] = None,
     output_dir: Annotated[
-        Path | None, Option("--output-dir", "-o", help="Output directory for structured law files"),
+        Path | None,
+        Option("--output-dir", "-o", help="Output directory for structured law files"),
     ] = None,
     download_dir: Annotated[
-        Path | None, Option("--download-dir", "-d", help="Directory for raw downloaded docx files"),
+        Path | None,
+        Option("--download-dir", "-d", help="Directory for raw downloaded docx files"),
     ] = None,
     category: Annotated[
         Literal["xf", "flfg", "xzfg", "jcfg", "sfjs", "dfxfg", "all"] | None,

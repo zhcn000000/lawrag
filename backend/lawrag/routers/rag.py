@@ -56,9 +56,9 @@ async def api_pageindex_import(request: PageIndexImportRequest) -> PageIndexImpo
 
         p = AsyncPath(path)
         if await p.is_dir():
-            results = await pageindex.aimport_from_dir(dir_path=path, category=request.category)
+            results = await pageindex.aimport_from_dir(dir_path=path)
         else:
-            result = await pageindex.aimport_file(file_path=path, category=request.category)
+            result = await pageindex.aimport_file(file_path=path)
             results = [result]
         total = sum(r.get("count", 0) for r in results)
         return PageIndexImportResponse(

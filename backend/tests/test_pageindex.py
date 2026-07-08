@@ -85,22 +85,40 @@ async def test_import_and_retrieve(test_law_file: AsyncPath) -> None:
     articles = await pageindex.aget_law_articles(law_name=law_name, start=2, end=4)
     assert len(articles) == 3
 
-    # Search articles
-    results = await pageindex.asearch_articles(law_name=law_name, query="自愿")
-    assert len(results) == 1
-    assert results[0]["article_number"] == 4
-
-    # TOC: 顶层为编, 编下含章, 章下含节
+    # TOC: 顶层为编, 编下含章, 章下含节; 每节点带 path
     toc = await pageindex.aget_law_toc(law_name=law_name)
     assert [c["title"] for c in toc] == ["总则", "权利"]
     assert all(c["node_type"] == "part" for c in toc)
+    assert all("path" in c for c in toc)
     rights_part = toc[1]
     assert rights_part["children"][0]["title"] == "权利与原则"
     assert [s["title"] for s in rights_part["children"][0]["children"]] == ["权利", "原则"]
 
-    # Articles under chapter (含节)
-    under = await pageindex.aget_articles_under_chapter(law_name=law_name, chapter_title="权利与原则")
-    assert {a["article_number"] for a in under} == {3, 4, 5}
+    # Browse law like folders by path: 顶层为编
+    top = await pageindex.abrowse_law(law_name=law_name)
+    assert top["node_type"] == "law"
+    assert [c["node_type"] for c in top["children"]] == ["part", "part"]
+    part2_path = top["children"][1]["path"]
+
+    # 下钻到 第2编 → 返回其下的章
+    part2 = await pageindex.abrowse_law(law_name=law_name, path=part2_path)
+    assert [c["node_type"] for c in part2["children"]] == ["chapter"]
+    chap_path = part2["children"][0]["path"]
+
+    # 下钻到章 → 返回其下的节
+    chap = await pageindex.abrowse_law(law_name=law_name, path=chap_path)
+    assert [c["node_type"] for c in chap["children"]] == ["section", "section"]
+    assert all(not c["is_leaf"] for c in chap["children"])
+    sec2_path = chap["children"][1]["path"]
+
+    # 下钻到节 → 返回条 (叶子)
+    sec2 = await pageindex.abrowse_law(law_name=law_name, path=sec2_path)
+    assert {c["number"] for c in sec2["children"]} == {4, 5}
+    assert all(c["is_leaf"] for c in sec2["children"])
+
+    # 不存在的 path 返回 error
+    missing = await pageindex.abrowse_law(law_name=law_name, path="b9/c9")
+    assert missing["error"] == "path_not_found"
 
     # 重复导入应保持幂等 (delete-then-insert + (law_name, path) 唯一约束)
     await pageindex.aimport_file(file_path=test_law_file)

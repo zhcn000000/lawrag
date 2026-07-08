@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
@@ -21,18 +21,11 @@ from lawrag.documents.embedder import EMBEDDING_DIMS
 
 from .types import BM25Vector, Password
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    def declared_attr(fn: Callable):
-        return fn
-
-
 VECTOR_DIM = EMBEDDING_DIMS
 
 
 class User(SQLModel, table=True):
-    __tablename__ = "users"
+    __tablename__ = "users"  # pyright: ignore
 
     id: Annotated[
         UUID,
@@ -57,14 +50,14 @@ class User(SQLModel, table=True):
     ]
     password: Annotated[str, Field(sa_column=Column(Password, nullable=False))]
 
-    @declared_attr
+    @declared_attr  # type: ignore
     @classmethod
     def __table_args__(cls) -> tuple:
         return (CheckConstraint(func.length(col(cls.username)) > 0, name="chk_user_name_not_empty"),)
 
 
 class SessionTable(SQLModel, table=True):
-    __tablename__ = "session"
+    __tablename__ = "session"  # pyright: ignore
     id: Annotated[
         UUID,
         Field(
@@ -79,7 +72,7 @@ class SessionTable(SQLModel, table=True):
 
 
 class HistoryTable(SQLModel, table=True):
-    __tablename__ = "history"
+    __tablename__ = "history"  # pyright: ignore
     id: Annotated[
         UUID,
         Field(
@@ -105,7 +98,7 @@ class HistoryTable(SQLModel, table=True):
 
 
 class LawNode(SQLModel, table=True):
-    __tablename__ = "law_nodes"
+    __tablename__ = "law_nodes"  # pyright: ignore
 
     id: Annotated[
         UUID,
@@ -144,7 +137,7 @@ class LawNode(SQLModel, table=True):
     path: Annotated[str, Field(sa_column=Column(String(256), nullable=False, server_default=""))]
     full_path: Annotated[str, Field(sa_column=Column(Text, nullable=False, server_default=""))]
 
-    @declared_attr
+    @declared_attr  # type: ignore
     @classmethod
     def __table_args__(cls) -> tuple:
         return (
@@ -158,7 +151,7 @@ class LawNode(SQLModel, table=True):
 
 
 class DocumentTable(SQLModel, table=True):
-    __tablename__ = "documents"
+    __tablename__ = "documents"  # pyright: ignore
     id: Annotated[
         UUID,
         Field(
@@ -187,7 +180,7 @@ class DocumentTable(SQLModel, table=True):
     ]
     bmvector: Annotated[dict[int, int], Field(sa_column=Column(BM25Vector, nullable=True))]
 
-    @declared_attr
+    @declared_attr  # type: ignore
     @classmethod
     def __table_args__(cls) -> tuple:
         return (

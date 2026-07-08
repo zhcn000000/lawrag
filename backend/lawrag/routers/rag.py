@@ -29,7 +29,7 @@ async def api_search(request: SearchRequest) -> SearchResponse:
         rag_mode = RAGMode()
         docs = await rag_mode.ahyprid_search(
             query=request.query,
-            k=request.k,
+            limit=request.k,
             regex=request.regex,
             offset=request.offset,
         )

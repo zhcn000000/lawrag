@@ -8,19 +8,16 @@ Downloads law docx/html files via a two-step request chain:
 import json
 import logging
 import re
+from collections.abc import AsyncIterator, Generator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import unquote, urlencode, urlparse
 
 from anyio import Path as AsyncPath
 from scrapy import Request, Spider
+from scrapy.http.response import Response
 
 from lawrag.spider.items import LawDownloadItem
-
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Generator
-
-    from scrapy.http.response import Response
 
 logger = logging.getLogger(__name__)
 

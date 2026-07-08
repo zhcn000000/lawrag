@@ -23,7 +23,7 @@ import type { BubbleListRef } from "@ant-design/x/es/bubble";
 import { useXChat, useXConversations } from "@ant-design/x-sdk";
 import styled from "@emotion/styled";
 import type { MenuProps, UploadFile, UploadProps } from "antd";
-import { Alert, Checkbox, Flex, Input, Modal, message, Tooltip } from "antd";
+import { Alert, Checkbox, Flex, Input, Modal, message, Tooltip, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ChatMessage,
@@ -444,7 +444,7 @@ export default function ChatPage() {
   }, []);
 
   const bubbleItems = useMemo(() => {
-    const renderContentItems = (contentItems?: ContentItem[]) => {
+    const renderContentItems = (contentItems: ContentItem[] | undefined, role: ChatMessage["role"]) => {
       if (!contentItems?.length) return { nodes: null, copyText: "" };
       const nodes: React.ReactNode[] = [];
       let copyText = "";
@@ -460,9 +460,15 @@ export default function ChatPage() {
             nextIndex += 1;
           }
           nodes.push(
-            <SuperMarkdown key={`text-${index}`} streaming={{ hasNextChunk: current.status !== "success" }}>
-              {mergedText}
-            </SuperMarkdown>,
+            role === "user" ? (
+              <Typography.Paragraph key={`text-${index}`} style={{ whiteSpace: "pre-wrap", marginBottom: 0 }}>
+                {mergedText}
+              </Typography.Paragraph>
+            ) : (
+              <SuperMarkdown key={`text-${index}`} streaming={{ hasNextChunk: current.status !== "success" }}>
+                {mergedText}
+              </SuperMarkdown>
+            ),
           );
           copyText += mergedText;
           index = nextIndex;
@@ -544,7 +550,7 @@ export default function ChatPage() {
 
     return messageInfos.map((info) => {
       const item = info.message;
-      const { nodes, copyText } = renderContentItems(item.content);
+      const { nodes, copyText } = renderContentItems(item.content, item.role);
       const actionsItems: ItemType[] = [{ key: "copy", actionRender: <Actions.Copy text={copyText} /> }];
       return {
         key: String(info.id),

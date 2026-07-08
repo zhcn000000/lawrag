@@ -6,7 +6,6 @@ from fastapi.staticfiles import StaticFiles
 
 from lawrag.database.user import TokenDataDict, UserManager
 from lawrag.routers.user import CurrentUserDep
-from lawrag.tools.mcp import mcp
 from lawrag.utils.environments import find_project_directory
 
 from .chat import router as chat_router
@@ -19,9 +18,7 @@ from .schema import (
 )
 from .user import router as user_router
 
-mcp_app = mcp.http_app()
-app = FastAPI(lifespan=mcp_app.lifespan)
-app.mount("/mcp", mcp_app, name="mcp")
+app = FastAPI()
 app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
 app.include_router(rag_router, prefix="/api/rag", tags=["rag"])
 app.include_router(user_router, prefix="/api/users", tags=["users"])

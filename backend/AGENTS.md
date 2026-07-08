@@ -10,7 +10,6 @@ Python 3.14 后端，基于 FastAPI + pydantic-ai 的法律 RAG 系统。
 - **嵌入/重排**: qwen3-embedding (4096 维) + qwen3-reranker，通过本地 `https://nw.lonwell.cn:10001` 的 OpenAI 兼容接口
 - **数据库**: PostgreSQL 16 + `pgvector` (`vector/halfvec/sparsevec/bit/hstore`) + `vchord` / `vchord_bm25` 提供向量 + BM25 索引；SQLAlchemy/SQLModel 异步
 - **CLI**: typer (入口 `lawrag`，定义在 `lawrag/__main__.py:285`)
-- **MCP**: fastmcp 挂在 `/mcp` 路径（`lawrag/routers/__init__.py:22-24`）
 - **爬虫**: scrapy (AsyncCrawlerRunner, 无 Twisted reactor) + selenium (可选) 抓取 NPC 法律法规数据库
 - **文档解析**: lxml, beautifulsoup4, markitdown（docx/html → markdown）
 - **NLP**: spacy + zh_core_web_trf（句切分 / BM25 分词）
@@ -27,7 +26,7 @@ backend/
 │   ├── __init__.py            # 重新导出 FastAPI app
 │   ├── __main__.py            # CLI 入口 (start/database/search/spider/pageindex)
 │   ├── routers/
-│   │   ├── __init__.py        # FastAPI app + auth (login/register/refresh/me) + /mcp + /static
+│   │   ├── __init__.py        # FastAPI app + auth (login/register/refresh/me) + /static
 │   │   ├── chat.py            # 流式 SSE chat (/api/chat/{session_id}/stream), 历史/会话/标题
 │   │   ├── rag.py             # /api/rag/search 与 /api/rag/pageindex/* REST 接口
 │   │   ├── user.py            # /api/users CRUD
@@ -35,7 +34,9 @@ backend/
 │   ├── chat/
 │   │   ├── model.py           # pydantic-ai Agent 装配 (DeepSeekProvider + toolsets)
 │   │   ├── struct.py          # ModelDeps (select_toolset)
-│   │   └── tools.py           # rag_toolset / code_toolset / web_toolset
+│   │   ├── rag_tools.py       # rag_toolset: list_laws / search_documents / get_law_articles / get_law_toc / browse_law
+│   │   ├── code_tools.py      # code_toolset: python_repl (pydantic-monty)
+│   │   └── web_tools.py       # web_toolset: search_web / extract_web / crawl_web / fetch_web (exa + httpx + bs4)
 │   ├── database/
 │   │   ├── __init__.py        # 导出 UserManager / init_db / reset_db / clean_db
 │   │   ├── database.py        # DatabaseManager (asession/acursor/aengine)
@@ -61,9 +62,6 @@ backend/
 │   │   ├── runner.py          # AsyncCrawlerRunner 入口 (run_law_index_spider / run_content_download)
 │   │   ├── pipelines.py       # LawIndexPipeline, ContentDownloadPipeline (markitdown → parse_multi_level → json.dumps)
 │   │   └── items.py           # LawIndexItem / LawDownloadItem
-│   ├── tools/
-│   │   ├── base.py            # 所有工具的 *_base 实现 (search_documents / search_law_articles / list_laws / get_law_toc / python_repl / search_web / extract_web / crawl_web / fetch_web)
-│   │   └── mcp.py             # fastmcp 工具注册
 │   └── utils/
 │       ├── environments.py    # pydantic-settings 配置 + 自动向上查找 .proj_root
 │       └── templete.py        # FIRST_INPUT_TEMPLATE 兜底 system prompt
@@ -104,19 +102,23 @@ uv run pytest -m "db"                  # 仅运行数据库测试
 CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 
 顶层：
+
 - `start` — uvicorn 启动 FastAPI（5 workers，HTTPS 可选，加载 `.env` 解析 `SSL_KEY_PATH`/`SSL_CERT_PATH`）。
 
 `database init|reset|clean [-d DB]` — 创建/重置/删除数据库。
+
 - `init` 安装扩展 `pgcrypto`、`vchord`、`vchord_bm25`；创建默认账号 `admin/admin`。
 
 `search <query> [-k N]` — 走 `RAGMode.ahyprid_search` 的混合检索，结果用 rich 表格展示 score/title/content。
 
 `spider crawl` — NPC 法律法规库索引爬虫：
+
 - `-c` 分类：`xf`(宪法) / `flfg`(法律) / `xzfg`(行政法规) / `jcfg`(监察法规) / `sfjs`(司法解释) / `dfxfg`(地方性法规) / `all`（不含 dfxfg）。
 - `-o` 输出路径，默认 `<DATA_ROOT>/law_index/law_index.json`。
 - Stage 1：只发现条目，调用 `/law-search/search/list` JSON API 翻页。
 
 `spider download [INDEX_PATH]` — 下载+解析：
+
 - `[INDEX_PATH]` 默认 `<DATA_ROOT>/law_index/law_index.json`。
 - `-o` 结构化输出目录；`-d` 原始 docx 目录；`-c` 可选分类过滤。
 - Stage 2+3：调用 `/law-search/download/pc` 获取签名 URL → 下载 docx → markitdown → `parse_multi_level` → `json.dumps` → `<structured_laws>/.manifest.json`。
@@ -126,6 +128,7 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 `pageindex import [PATH] [-c CATEGORY]` — 把 `structured_laws/*.json` 导入 `law_nodes`，默认 `<DATA_ROOT>/structured_laws`。重导前先清空同 `law_name` 的节点，`(law_name, path)` 唯一键保证幂等。
 
 `pageindex list|show|toc|search|embed` — 法条浏览/查询/嵌入：
+
 - `list`
 - `show <law_name> [-s START] [-e END] [-l LIMIT]`
 - `toc <law_name>`（编/分编/章/节 树）

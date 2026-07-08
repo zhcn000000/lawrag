@@ -197,38 +197,86 @@ class LawPageIndex:
             result = await session.execute(stmt)
             return list(starmap(_article_dict, result.all()))
 
-    async def asearch_articles(
+    async def abrowse_law(
         self,
         law_name: str,
-        query: str,
-        limit: int = 10,
-    ) -> list[dict]:
-        async with self.__db.asession() as session:
-            stmt, _, _ = self._article_query(law_name)
-            stmt = stmt.where(col(LawNode.content).ilike(f"%{query}%")).order_by(col(LawNode.id)).limit(limit)
-            result = await session.execute(stmt)
-            return list(starmap(_article_dict, result.all()))
-
-    async def aget_articles_under_chapter(
-        self,
-        law_name: str,
-        chapter_title: str,
+        path: str | None = None,
         limit: int = 200,
-    ) -> list[dict]:
-        """返回某一章 (含其下各节) 内的全部法条, 支持"查询某章下的多个法条文本"。"""
+    ) -> dict:
+        if path is not None and not path.startswith("law0/"):
+            path = path.removeprefix("/")
+            path = f"law0/{path}"
         async with self.__db.asession() as session:
-            stmt, p1, p2 = self._article_query(law_name)
-            stmt = (
-                stmt
-                .where(
-                    ((col(p1.node_type) == "chapter") & (col(p1.content) == chapter_title))
-                    | ((col(p2.node_type) == "chapter") & (col(p2.content) == chapter_title)),
+            if path:
+                current = (
+                    (
+                        await session.execute(
+                            select(LawNode).where(
+                                col(LawNode.law_name) == law_name,
+                                col(LawNode.path) == path,
+                            ),
+                        )
+                    )
+                    .scalars()
+                    .first()
                 )
-                .order_by(col(LawNode.id))
-                .limit(limit)
+                if current is None:
+                    return {"law_name": law_name, "path": path, "error": "path_not_found", "children": []}
+                parent_id = current.id
+                cur_type = current.node_type
+                cur_title = current.content
+                cur_path = current.path
+            else:
+                root = (
+                    (
+                        await session.execute(
+                            select(LawNode).where(
+                                col(LawNode.law_name) == law_name,
+                                col(LawNode.node_type) == "law",
+                            ),
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
+                if root is None:
+                    return {"law_name": law_name, "path": "", "error": "law_not_found", "children": []}
+                parent_id = root.id
+                cur_type = "law"
+                cur_title = law_name
+                cur_path = ""
+
+            rows = (
+                (
+                    await session.execute(
+                        select(LawNode)
+                        .where(col(LawNode.parent_id) == parent_id)
+                        .order_by(col(LawNode.id))
+                        .limit(limit),
+                    )
+                )
+                .scalars()
+                .all()
             )
-            result = await session.execute(stmt)
-            return list(starmap(_article_dict, result.all()))
+
+            children = [
+                {
+                    "path": r.path,
+                    "node_type": r.node_type,
+                    "number": r.number,
+                    "title": r.content if r.node_type != "article" else None,
+                    "content": r.content if r.node_type == "article" else None,
+                    "is_leaf": r.node_type == "article",
+                }
+                for r in rows
+            ]
+            return {
+                "law_name": law_name,
+                "path": cur_path,
+                "node_type": cur_type,
+                "title": cur_title,
+                "children": children,
+            }
 
     async def aget_law_toc(self, law_name: str) -> list[dict]:
         """返回一部法律的多级目录 (编/分编/章/节 标题), 供 LLM 索引上层结构。
@@ -252,6 +300,7 @@ class LawPageIndex:
                     "node_type": row.node_type,
                     "number": row.number,
                     "title": row.content,
+                    "path": row.path,
                     "children": [],
                     "_parent": row.parent_id,
                 }

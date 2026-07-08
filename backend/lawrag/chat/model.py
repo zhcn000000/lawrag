@@ -8,8 +8,10 @@ from pydantic_ai.providers.deepseek import DeepSeekProvider
 
 from lawrag.utils.templete import FIRST_INPUT_TEMPLATE
 
+from .code_tools import code_toolset
+from .rag_tools import rag_toolset
 from .struct import ModelDeps
-from .tools import code_toolset, rag_toolset, web_toolset
+from .web_tools import web_toolset
 
 logger = logging.getLogger(__name__)
 

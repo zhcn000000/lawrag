@@ -74,14 +74,14 @@ async def database_clean(
     await clean_db(dbname=dbname)
 
 
-@pageindex_cmd.command("query")
+@pageindex_cmd.command("search")
 @runnify
-async def pageindex_query(
+async def pageindex_search(
     query: Annotated[str, Argument(help="Search query")],
-    k: Annotated[int, Option("--top", "-k", help="Number of results")] = 5,
+    limit: Annotated[int, Option("--limit", "-k", help="Number of results")] = 5,
 ) -> None:
     rag = RAGMode()
-    docs = await rag.ahyprid_search(query=query, k=k)
+    docs = await rag.ahyprid_search(query=query, limit=limit)
 
     if docs:
         table = Table(title=f'搜索结果: "{query}"', title_style="bold")
@@ -180,27 +180,6 @@ async def pageindex_toc(
             _walk(node.get("children") or [], depth + 1)
 
     _walk(toc, 0)
-    rprint(table)
-
-
-@pageindex_cmd.command("search")
-@runnify
-async def pageindex_search(
-    law_name: Annotated[str, Argument(help="Law name to search in")],
-    query: Annotated[str, Argument(help="Search query")],
-    limit: Annotated[int, Option("--limit", "-l", help="Max results")] = 10,
-) -> None:
-    pageindex = LawPageIndex()
-    articles = await pageindex.asearch_articles(law_name=law_name, query=query, limit=limit)
-    if not articles:
-        rprint(f"在 '{law_name}' 中未找到匹配 '{query}' 的法条")
-        return
-    table = Table(title=f"搜索结果: '{law_name}' 中的 '{query}'", title_style="bold")
-    table.add_column("条号", style="cyan", width=8)
-    table.add_column("内容", style="white")
-    for a in articles:
-        content = a["content"][:150].replace("\n", " ") + ("..." if len(a["content"]) > 150 else "")
-        table.add_row(f"第{a['article_number']}条", content)
     rprint(table)
 
 

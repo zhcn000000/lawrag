@@ -56,12 +56,19 @@ class RAGMode:
         query: str,
         topn: int,
         session,
+        law_name: str | None = None,
         regex: str | None = None,
     ) -> list[UUID]:
         query_vectors = await aembed_documents([query])
         query_vector = query_vectors[0]
 
         stmt = select(col(DocumentTable.id))
+        if law_name:
+            stmt = stmt.where(
+                col(DocumentTable.node_id).in_(
+                    select(col(LawNode.id)).where(col(LawNode.law_name) == law_name),
+                ),
+            )
         if regex:
             stmt = stmt.where(col(DocumentTable.content).regexp_match(regex))
         stmt = stmt.order_by(
@@ -76,11 +83,18 @@ class RAGMode:
         query: str,
         topn: int,
         session,
+        law_name: str | None = None,
         regex: str | None = None,
     ) -> list[UUID]:
         query_count = await atokenize_document(query)
 
         stmt = select(col(DocumentTable.id))
+        if law_name:
+            stmt = stmt.where(
+                col(DocumentTable.node_id).in_(
+                    select(col(LawNode.id)).where(col(LawNode.law_name) == law_name),
+                ),
+            )
         if regex:
             stmt = stmt.where(col(DocumentTable.content).regexp_match(regex))
 
@@ -138,6 +152,7 @@ class RAGMode:
                     content=row.content or "",
                     name=node.law_name if node else None,
                     page_index=_node_breadcrumb(node, node_map) if node else None,
+                    node_path=node.path if node else None,
                     id=row.id,
                 ),
             )
@@ -146,7 +161,8 @@ class RAGMode:
     async def ahyprid_search(
         self,
         query: str,
-        k: int = 4,
+        limit: int = 4,
+        law_name: str | None = None,
         regex: str | None = None,
         vector_weight: float = 0.6,
         bm25_weight: float = 0.4,
@@ -154,12 +170,13 @@ class RAGMode:
         use_rerank: bool = True,
     ) -> list[Document]:
         async with self.__db.asession() as session:
-            search_topn = max(k * 3, 15)
+            search_topn = max(limit * 3, 15)
 
             vector_ids = await self._vector_search(
                 query=query,
                 topn=search_topn,
                 session=session,
+                law_name=law_name,
                 regex=regex,
             )
 
@@ -167,6 +184,7 @@ class RAGMode:
                 query=query,
                 topn=search_topn,
                 session=session,
+                law_name=law_name,
                 regex=regex,
             )
 
@@ -180,12 +198,12 @@ class RAGMode:
                 return []
 
             fused_ids = self._rrf_fusion(ranked_lists, topn=search_topn)
-            fused_ids = fused_ids[offset : offset + k]
+            fused_ids = fused_ids[offset : offset + limit]
 
             documents = await self._fetch_documents(fused_ids, session)
 
             if use_rerank:
-                documents = await arerank_documents(query, documents, topn=k)
+                documents = await arerank_documents(query, documents, topn=limit)
 
             for doc in documents:
                 doc.query_score = doc.query_score or 0.0

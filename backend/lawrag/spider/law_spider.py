@@ -13,16 +13,13 @@ Available individually only (excluded from "all"):
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+from collections.abc import AsyncIterator, Generator
+from typing import Any
 
 from scrapy import Request, Spider
+from scrapy.http.response import Response
 
 from lawrag.spider.items import LawIndexItem
-
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Generator
-
-    from scrapy.http.response import Response
 
 logger = logging.getLogger(__name__)
 

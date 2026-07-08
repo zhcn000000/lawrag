@@ -8,7 +8,7 @@ from anyio import Path as AsyncPath
 from asyncer import asyncify
 from markitdown import MarkItDown
 
-from lawrag.documents.lawparser import has_parsed_content, parse_multi_level, write_structured_law
+from lawrag.documents.lawparser import has_parsed_content, parse_multi_level
 from lawrag.spider.items import LawDownloadItem, LawIndexItem
 from lawrag.utils.environments import settings as env_settings
 
@@ -83,8 +83,9 @@ class ContentDownloadPipeline:
                 self._results.append({"law_name": law_name, "status": "failed", "output": None})
                 return item
 
-            structured = await write_structured_law(parsed=parsed, output_dir=self.structured_dir, law_name=law_name)
-            self._results.append({"law_name": law_name, "status": "ok", "output": str(structured)})
+            output_path = self.structured_dir / f"{law_name}.json"
+            await output_path.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
+            self._results.append({"law_name": law_name, "status": "ok", "output": str(output_path)})
         except Exception:
             logger.exception("Failed to process %s", law_name)
             self._results.append({"law_name": law_name, "status": "error", "output": None})

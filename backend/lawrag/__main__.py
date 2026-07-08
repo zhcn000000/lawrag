@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 from typing import Annotated, Literal
@@ -14,6 +15,7 @@ from typer import Argument, Option, Typer
 from lawrag.database.initdb import clean_db, init_db, reset_db
 from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragmode import RAGMode
+from lawrag.documents.lawparser import has_parsed_content, parse_multi_level
 from lawrag.routers import app
 from lawrag.utils.environments import settings
 
@@ -86,7 +88,7 @@ async def search(
 @pageindex_cmd.command("import")
 @runnify
 async def pageindex_import(
-    path: Annotated[Path, Argument(help="Path to law .txt file or directory")] | None = None,
+    path: Annotated[Path, Argument(help="Path to law .json file or directory")] | None = None,
     category: Annotated[str | None, Option("--category", "-c", help="Category for the laws")] = None,
 ) -> None:
     pageindex = LawPageIndex()
@@ -208,6 +210,53 @@ async def pageindex_embed(
     rprint(f"嵌入完成: {result['law_name']}")
     rprint(f"  法条数: {result['articles_embedded']}")
     rprint(f"  分块数: {result['chunks_created']}")
+
+
+@pageindex_cmd.command("convert")
+@runnify
+async def pageindex_convert(
+    raw_dir: Annotated[Path | None, Option("--raw-dir", "-r", help="raw_laws 目录路径")] = None,
+    output_dir: Annotated[Path | None, Option("--output-dir", "-o", help="输出目录 (structured_laws)")] = None,
+    filter_name: Annotated[str | None, Option("--filter", "-f", help="仅转换名称包含此关键词的法律")] = None,
+) -> None:
+    """从 raw_laws 重新解析并生成 structured_laws JSON (无需重新下载)。
+
+    读取 ``raw_laws/*.txt`` 中的 markitdown 原始文本,
+    运行 ``parse_multi_level`` 解析层级结构,
+    输出 JSON 到 ``structured_laws/*.json``。
+    """
+    if raw_dir is None:
+        raw_dir = settings.DATA_ROOT / "raw_laws"
+    if output_dir is None:
+        output_dir = settings.DATA_ROOT / "structured_laws"
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    results: list[dict] = []
+    for file in sorted(raw_dir.rglob("*.txt")):
+        if file.name.startswith("."):
+            continue
+        law_name = file.stem
+        if filter_name and filter_name not in law_name:
+            continue
+        try:
+            text = file.read_text(encoding="utf-8")
+            parsed = parse_multi_level(text)
+            if not has_parsed_content(parsed):
+                logger.warning("跳过 %s: 无法解析内容", law_name)
+                results.append({"law_name": law_name, "status": "skipped"})
+                continue
+            target = output_dir / f"{law_name}.json"
+            target.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
+            results.append({"law_name": law_name, "status": "ok"})
+        except Exception:
+            logger.exception("转换失败: %s", law_name)
+            results.append({"law_name": law_name, "status": "error"})
+
+    ok = sum(1 for r in results if r["status"] == "ok")
+    skipped = sum(1 for r in results if r["status"] == "skipped")
+    errors = sum(1 for r in results if r["status"] == "error")
+    logger.info("转换完成: %d OK, %d 跳过, %d 失败 (共 %d)", ok, skipped, errors, len(results))
 
 
 spider_cmd = Typer(pretty_exceptions_enable=False, help="法律爬虫命令")

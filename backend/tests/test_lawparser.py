@@ -1,68 +1,70 @@
-import pytest
+from lawrag.documents.lawparser import flatten_hierarchy, has_parsed_content, parse_multi_level
 
-from lawrag.documents.lawparser import cn_to_int, has_parsed_content, parse_multi_level, parse_structured_law
-
-STRUCTURED_LAW = "\n".join([
-    "=" * 60,
-    "中华人民共和国测试法",
-    "=" * 60,
-    "",
-    "第一编  总则",
-    "",
-    "第一章  基本规定",
-    "",
-    "    第一条  为了保护测试主体的合法权益，根据宪法，制定本法。",
-    "",
-    "    第二条  测试法调整测试关系。",
-    "",
-    "第二编  权利",
-    "",
-    "第一分编  人身权利",
-    "",
-    "第二章  权利总则",
-    "",
-    "    第一节  一般规定",
-    "",
-    "    第三条  测试主体依法享有测试权利。",
-    "",
-    "    第二节  特别规定",
-    "",
-    "    第四条  测试活动应当遵循自愿原则。",
-    "",
-])
-
-TOP_LEVEL_LAW = "\n".join([
-    "=" * 60,
-    "中华人民共和国简法",
-    "=" * 60,
-    "",
-    "第一条  简法第一条。",
-    "",
-    "第二条  简法第二条。",
-    "",
-])
-
-
-@pytest.mark.parametrize(
-    ("cn", "expected"),
-    [
-        ("一", 1),
-        ("二", 2),
-        ("十", 10),
-        ("十一", 11),
-        ("二十", 20),
-        ("二十五", 25),
-        ("一百", 100),
-        ("一百二十三", 123),
-        ("一千二百三十四", 1234),
+PARSED_DICT = {
+    "law_name": "中华人民共和国测试法",
+    "preamble": None,
+    "parts": [
+        {
+            "number": 1,
+            "title": "总则",
+            "chapters": [
+                {
+                    "number": 1,
+                    "title": "基本规定",
+                    "articles": [
+                        {"number": 1, "content": "为了保护测试主体的合法权益，根据宪法，制定本法。"},
+                        {"number": 2, "content": "测试法调整测试关系。"},
+                    ],
+                },
+            ],
+        },
+        {
+            "number": 2,
+            "title": "权利",
+            "subparts": [
+                {
+                    "number": 1,
+                    "title": "人身权利",
+                    "chapters": [
+                        {
+                            "number": 2,
+                            "title": "权利总则",
+                            "sections": [
+                                {
+                                    "number": 1,
+                                    "title": "一般规定",
+                                    "articles": [
+                                        {"number": 3, "content": "测试主体依法享有测试权利。"},
+                                    ],
+                                },
+                                {
+                                    "number": 2,
+                                    "title": "特别规定",
+                                    "articles": [
+                                        {"number": 4, "content": "测试活动应当遵循自愿原则。"},
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
     ],
-)
-def test_cn_to_int(cn: str, expected: int) -> None:
-    assert cn_to_int(cn) == expected
+}
+
+TOP_LEVEL_DICT = {
+    "law_name": "中华人民共和国简法",
+    "preamble": None,
+    "articles": [
+        {"number": 1, "content": "简法第一条。"},
+        {"number": 2, "content": "简法第二条。"},
+    ],
+}
 
 
-def test_parse_structured_root_and_counts() -> None:
-    nodes = parse_structured_law(STRUCTURED_LAW, law_name="中华人民共和国测试法")
+def test_flatten_hierarchy_root_and_counts() -> None:
+    nodes = flatten_hierarchy(PARSED_DICT, law_name="中华人民共和国测试法")
     assert nodes[0]["node_type"] == "law"
     assert nodes[0]["parent"] is None
     assert nodes[0]["title"] == "中华人民共和国测试法"
@@ -75,14 +77,14 @@ def test_parse_structured_root_and_counts() -> None:
     assert types.count("article") == 4
 
 
-def test_parse_structured_paths_unique() -> None:
-    nodes = parse_structured_law(STRUCTURED_LAW, law_name="中华人民共和国测试法")
+def test_flatten_hierarchy_paths_unique() -> None:
+    nodes = flatten_hierarchy(PARSED_DICT, law_name="中华人民共和国测试法")
     paths = [n["path"] for n in nodes]
     assert len(paths) == len(set(paths))
 
 
-def test_parse_structured_hierarchy() -> None:
-    nodes = parse_structured_law(STRUCTURED_LAW, law_name="中华人民共和国测试法")
+def test_flatten_hierarchy_hierarchy() -> None:
+    nodes = flatten_hierarchy(PARSED_DICT, law_name="中华人民共和国测试法")
 
     # 第三条 → 第一节 → 第二章 → 第一分编 → 第二编 → law
     art3 = next(n for n in nodes if n["node_type"] == "article" and n["number"] == 3)
@@ -108,8 +110,8 @@ def test_parse_structured_hierarchy() -> None:
     assert nodes[chapter1["parent"]]["title"] == "总则"
 
 
-def test_parse_structured_top_level_articles() -> None:
-    nodes = parse_structured_law(TOP_LEVEL_LAW, law_name="中华人民共和国简法")
+def test_flatten_hierarchy_top_level_articles() -> None:
+    nodes = flatten_hierarchy(TOP_LEVEL_DICT, law_name="中华人民共和国简法")
     articles = [n for n in nodes if n["node_type"] == "article"]
     assert len(articles) == 2
     # 无编/章时法条直接挂在根节点下

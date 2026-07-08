@@ -1,3 +1,4 @@
+import json
 import logging
 from itertools import starmap
 from pathlib import Path
@@ -11,7 +12,7 @@ from sqlalchemy.sql.functions import count
 from sqlmodel import col
 
 from lawrag.database.document import DocumentStore
-from lawrag.documents.lawparser import parse_structured_law
+from lawrag.documents.lawparser import flatten_hierarchy
 
 from .database import DatabaseManager
 from .tables import DocumentTable, LawNode
@@ -84,9 +85,9 @@ class LawPageIndex:
     ) -> dict:
         path = AsyncPath(file_path)
         law_name = path.stem
-        content = await path.read_text(encoding="utf-8")
+        parsed: dict = json.loads(await path.read_text(encoding="utf-8"))
 
-        nodes = parse_structured_law(content, law_name=law_name)
+        nodes = flatten_hierarchy(parsed, law_name)
         articles = sum(1 for n in nodes if n["node_type"] == "article")
         if articles == 0:
             return {"file": law_name, "status": "empty", "count": 0}
@@ -151,7 +152,7 @@ class LawPageIndex:
             raise NotADirectoryError(f"Not a directory: {path}")
 
         results: list[dict] = []
-        paths = sorted([file_path async for file_path in path.rglob("*.txt")])
+        paths = sorted([file_path async for file_path in path.rglob("*.json")])
 
         for file_path in paths:
             if await file_path.is_file() and not file_path.name.startswith("."):

@@ -50,7 +50,7 @@ backend/
 │   │   └── user.py            # UserManager: JWT 签发/校验 + 用户 CRUD
 │   ├── documents/
 │   │   ├── models.py          # Document (pydantic) + get_nlp() 单例
-│   │   ├── lawparser.py       # cn_to_int / parse_structured_law / parse_multi_level / write_structured_law
+│   │   ├── lawparser.py       # cn_to_int / parse_multi_level / flatten_hierarchy
 │   │   ├── embedder.py        # aembed_documents / arerank_* (qwen3-embedding/qwen3-reranker)
 │   │   ├── splitter.py        # asplit_content (spacy 句切分 + token overlap) / asplit_document
 │   │   ├── tokenizer.py       # atokenize_document (mmh3 → BM25 词频 Counter)
@@ -59,7 +59,7 @@ backend/
 │   │   ├── law_spider.py      # LawIndexSpider: NPC /law-search/search/list 翻页
 │   │   ├── content_spider.py  # ContentDownloadSpider: 签名 URL → docx 下载
 │   │   ├── runner.py          # AsyncCrawlerRunner 入口 (run_law_index_spider / run_content_download)
-│   │   ├── pipelines.py       # LawIndexPipeline, ContentDownloadPipeline (markitdown → parse_multi_level → write_structured_law)
+│   │   ├── pipelines.py       # LawIndexPipeline, ContentDownloadPipeline (markitdown → parse_multi_level → json.dumps)
 │   │   └── items.py           # LawIndexItem / LawDownloadItem
 │   ├── tools/
 │   │   ├── base.py            # 所有工具的 *_base 实现 (search_documents / search_law_articles / list_laws / get_law_toc / python_repl / search_web / extract_web / crawl_web / fetch_web)
@@ -69,7 +69,7 @@ backend/
 │       └── templete.py        # FIRST_INPUT_TEMPLATE 兜底 system prompt
 ├── tests/
 │   ├── conftest.py            # anyio_backend=asyncio
-│   ├── test_lawparser.py      # cn_to_int / parse_structured_law / parse_multi_level / TOC
+│   ├── test_lawparser.py      # cn_to_int / flatten_hierarchy / parse_multi_level / TOC
 │   └── test_pageindex.py      # @pytest.mark.db 真实数据库 import/list/get/search/toc/delete
 ├── pyproject.toml
 └── uv.lock
@@ -82,7 +82,7 @@ data/
 ├── law_index/law_index.json           # spider crawl 产物
 ├── downloaded_laws/*.docx             # spider download 原始文件
 ├── raw_laws/<law_name>.txt            # markitdown 转换结果
-└── structured_laws/<law_name>.txt     # write_structured_law 标准化结果 (pageindex import 输入)
+└── structured_laws/<law_name>.json    # parse_multi_level 输出的 JSON 序列化结果 (pageindex import 输入)
 ```
 
 ## 包管理与开发命令
@@ -119,9 +119,11 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 `spider download [INDEX_PATH]` — 下载+解析：
 - `[INDEX_PATH]` 默认 `<DATA_ROOT>/law_index/law_index.json`。
 - `-o` 结构化输出目录；`-d` 原始 docx 目录；`-c` 可选分类过滤。
-- Stage 2+3：调用 `/law-search/download/pc` 获取签名 URL → 下载 docx → markitdown → `parse_multi_level` → `write_structured_law` → `<structured_laws>/.manifest.json`。
+- Stage 2+3：调用 `/law-search/download/pc` 获取签名 URL → 下载 docx → markitdown → `parse_multi_level` → `json.dumps` → `<structured_laws>/.manifest.json`。
 
-`pageindex import [PATH] [-c CATEGORY]` — 把 `structured_laws/*.txt` 导入 `law_nodes`，默认 `<DATA_ROOT>/structured_laws`。重导前先清空同 `law_name` 的节点，`(law_name, path)` 唯一键保证幂等。
+`pageindex convert [-r RAW_DIR] [-o OUTPUT_DIR] [-f FILTER]` — 从 `raw_laws/*.txt` 重新解析并生成 `structured_laws/*.json`（无需重新下载）。可选 `-f` 按法律名称过滤。
+
+`pageindex import [PATH] [-c CATEGORY]` — 把 `structured_laws/*.json` 导入 `law_nodes`，默认 `<DATA_ROOT>/structured_laws`。重导前先清空同 `law_name` 的节点，`(law_name, path)` 唯一键保证幂等。
 
 `pageindex list|show|toc|search|embed` — 法条浏览/查询/嵌入：
 - `list`

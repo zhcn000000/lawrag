@@ -17,6 +17,7 @@ from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragmode import RAGMode
 from lawrag.documents.lawparser import has_parsed_content, parse_multi_level
 from lawrag.routers import app
+from lawrag.spider.runner import run_content_download, run_law_index_spider
 from lawrag.utils.environments import settings
 
 logger = logging.getLogger(__name__)
@@ -289,7 +290,6 @@ async def spider_crawl(
     Categories: xf (宪法), flfg (法律), xzfg (行政法规), jcfg (监察法规), sfjs (司法解释).
     Use dfxfg for 地方性法规 (excluded from 'all').
     """
-    from lawrag.spider.runner import run_law_index_spider
 
     logger.info("Running law index spider for category: %s", category)
 
@@ -319,7 +319,6 @@ async def spider_download(
     Downloads docx/HTML from NPC database, converts to text,
     and parses multi-level structure (chapters/sections/articles).
     """
-    from lawrag.spider.runner import run_content_download
 
     if index_path is None:
         index_path = settings.DATA_ROOT / "law_index" / "law_index.json"

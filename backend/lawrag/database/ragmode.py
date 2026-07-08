@@ -63,7 +63,7 @@ class RAGMode:
 
         stmt = select(col(DocumentTable.id))
         if regex:
-            stmt = stmt.where(col(DocumentTable.content).op("~")(regex))
+            stmt = stmt.where(col(DocumentTable.content).regexp_match(regex))
         stmt = stmt.order_by(
             col(DocumentTable.vector).l2_distance(query_vector),  # type: ignore
         ).limit(topn)
@@ -82,7 +82,7 @@ class RAGMode:
 
         stmt = select(col(DocumentTable.id))
         if regex:
-            stmt = stmt.where(col(DocumentTable.content).op("~")(regex))
+            stmt = stmt.where(col(DocumentTable.content).regexp_match(regex))
 
         stmt = stmt.order_by(
             col(DocumentTable.bmvector).neg_bm25_rank(  # type: ignore

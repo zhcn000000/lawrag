@@ -117,6 +117,19 @@ def _format_location(article: dict) -> str:
     return " / ".join(parts)
 
 
+async def list_laws_base(regex: str | None = None, limit: int = 50, offset: int = 0) -> str:
+    laws = await page_index.alist_laws(regex=regex, limit=limit, offset=offset)
+    if not laws:
+        return "暂无已导入的法律。"
+    dff = pd.DataFrame(laws)
+    header = "## 已导入法律列表"
+    if regex:
+        header += f" (匹配: `{regex}`)"
+    if offset:
+        header += f" (第{offset + 1}条起)"
+    return f"{header}\n\n共 {len(laws)} 部\n\n{dff.to_markdown(index=False)}"
+
+
 async def get_law_toc_base(law_name: str) -> str:
     toc = await page_index.aget_law_toc(law_name=law_name)
     if not toc:

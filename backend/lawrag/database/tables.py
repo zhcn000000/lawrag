@@ -156,6 +156,7 @@ class LawNode(SQLModel, table=True):
     content: Annotated[str | None, Field(sa_column=Column(Text, nullable=True))]
     order_index: Annotated[int, Field(sa_column=Column(Integer, nullable=False, server_default="0"))]
     path: Annotated[str, Field(sa_column=Column(String(256), nullable=False, server_default=""))]
+    full_path: Annotated[str, Field(sa_column=Column(Text, nullable=False, server_default=""))]
     category: Annotated[str | None, Field(sa_column=Column(String(128), nullable=True, index=True))]
     meta: Annotated[
         dict,

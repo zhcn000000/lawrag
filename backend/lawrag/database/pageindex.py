@@ -50,33 +50,22 @@ def _article_dict(article: LawNode, p1: LawNode | None, p2: LawNode | None) -> d
     }
 
 
-def _build_embed_text(node: LawNode, p1: LawNode | None, p2: LawNode | None) -> str:
-    """为不同层级的节点构造用于嵌入/检索的上下文文本。"""
-    law = node.law_name
-    if node.node_type == "part":
-        return f"《{law}》第{node.number}编 {node.title}"
-    if node.node_type == "subpart":
-        return f"《{law}》第{node.number}分编 {node.title}"
-    if node.node_type == "chapter":
-        return f"《{law}》第{node.number}章 {node.title}"
-    if node.node_type == "section":
-        chapter, _ = _ancestor_titles(p1, p2)
-        chapter_part = f"{chapter.title} " if chapter else ""
-        return f"《{law}》{chapter_part}第{node.number}节 {node.title}"
+def _build_embed_text(node: LawNode) -> str:
+    """利用导入时预计算的完整层级路径构造嵌入/检索上下文文本。"""
+    fp = node.full_path or ""
+    if node.node_type == "article":
+        return f"{fp}规定，{node.content or ''}。"
     if node.node_type == "preamble":
-        return f"《{law}》序言 {node.content}"
-    chapter, section = _ancestor_titles(p1, p2)
-    prefix = "".join(part for part in (chapter.title if chapter else "", section.title if section else "") if part)
-    prefix = f"{prefix} " if prefix else ""
-    return f"《{law}》{prefix}第{node.number}条规定，{node.content}。"
+        return f"{fp} {node.content or ''}"
+    return fp
 
 
 class LawPageIndex:
     def __init__(self, dbname: str | None = None) -> None:
         self.__db = DatabaseManager(dbname)
 
-    def _article_query(self, law_name: str | None = None):
-        """构造 article 节点及其一级/二级父节点的联表查询。"""
+    def _article_query(self, law_name: str | None = None):  # type: ignore[reportUnknownParameterType]
+        """构造 article 节点及其一级/二级父节点的联表查询。返回 (stmt, p1, p2) 供调用方追加条件。"""
         p1 = aliased(LawNode)
         p2 = aliased(LawNode)
         stmt = (
@@ -87,7 +76,7 @@ class LawPageIndex:
         )
         if law_name is not None:
             stmt = stmt.where(col(LawNode.law_name) == law_name)
-        return stmt
+        return stmt, p1, p2
 
     async def aimport_file(
         self,
@@ -104,6 +93,28 @@ class LawPageIndex:
             return {"file": law_name, "status": "empty", "count": 0}
 
         ids = [uuid4() for _ in nodes]
+
+        _type_unit = {"part": "编", "subpart": "分编", "chapter": "章", "section": "节", "article": "条"}
+
+        def _node_seg(node_type: str, number: int | None, title: str | None) -> str:
+            if node_type == "law":
+                return f"《{law_name}》"
+            if node_type == "preamble":
+                return "序言"
+            unit = _type_unit.get(node_type, "")
+            if number is not None and unit:
+                return f"第{number}{unit} {title or ''}".strip()
+            return title or ""
+
+        full_paths: list[str] = [""] * len(nodes)
+        for i, n in enumerate(nodes):
+            seg = _node_seg(n["node_type"], n["number"], n["title"])
+            parent_idx = n["parent"]
+            if parent_idx is not None and parent_idx < i:
+                full_paths[i] = f"{full_paths[parent_idx]} {seg}".strip()
+            else:
+                full_paths[i] = seg
+
         values = [
             {
                 "id": ids[i],
@@ -115,6 +126,7 @@ class LawPageIndex:
                 "content": n["content"],
                 "order_index": i,
                 "path": n["path"],
+                "full_path": full_paths[i],
                 "category": category,
             }
             for i, n in enumerate(nodes)
@@ -161,7 +173,8 @@ class LawPageIndex:
         article_number: int,
     ) -> dict | None:
         async with self.__db.asession() as session:
-            stmt = self._article_query(law_name).where(col(LawNode.number) == article_number)
+            stmt, _, _ = self._article_query(law_name)
+            stmt = stmt.where(col(LawNode.number) == article_number)
             result = await session.execute(stmt)
             row = result.first()
             if row is None:
@@ -177,7 +190,7 @@ class LawPageIndex:
         offset: int = 0,
     ) -> list[dict]:
         async with self.__db.asession() as session:
-            stmt = self._article_query(law_name)
+            stmt, _, _ = self._article_query(law_name)
             if start is not None:
                 stmt = stmt.where(col(LawNode.number) >= start)
             if end is not None:
@@ -193,13 +206,8 @@ class LawPageIndex:
         limit: int = 10,
     ) -> list[dict]:
         async with self.__db.asession() as session:
-            stmt = (
-                self
-                ._article_query(law_name)
-                .where(col(LawNode.content).ilike(f"%{query}%"))
-                .order_by(col(LawNode.order_index))
-                .limit(limit)
-            )
+            stmt, _, _ = self._article_query(law_name)
+            stmt = stmt.where(col(LawNode.content).ilike(f"%{query}%")).order_by(col(LawNode.order_index)).limit(limit)
             result = await session.execute(stmt)
             return list(starmap(_article_dict, result.all()))
 
@@ -211,19 +219,12 @@ class LawPageIndex:
     ) -> list[dict]:
         """返回某一章 (含其下各节) 内的全部法条, 支持"查询某章下的多个法条文本"。"""
         async with self.__db.asession() as session:
-            p1 = aliased(LawNode)
-            p2 = aliased(LawNode)
+            stmt, p1, p2 = self._article_query(law_name)
             stmt = (
-                select(LawNode, p1, p2)
-                .join(p1, col(LawNode.parent_id) == col(p1.id), isouter=True)
-                .join(p2, col(p1.parent_id) == col(p2.id), isouter=True)
+                stmt
                 .where(
-                    col(LawNode.law_name) == law_name,
-                    col(LawNode.node_type) == "article",
-                    (
-                        ((col(p1.node_type) == "chapter") & (col(p1.title) == chapter_title))
-                        | ((col(p2.node_type) == "chapter") & (col(p2.title) == chapter_title))
-                    ),
+                    ((col(p1.node_type) == "chapter") & (col(p1.title) == chapter_title))
+                    | ((col(p2.node_type) == "chapter") & (col(p2.title) == chapter_title)),
                 )
                 .order_by(col(LawNode.order_index))
                 .limit(limit)
@@ -267,7 +268,9 @@ class LawPageIndex:
                 entry.pop("_parent", None)
             return toc
 
-    async def alist_laws(self) -> list[dict]:
+    async def alist_laws(
+        self, regex: str | None = None, limit: int | None = None, offset: int | None = None
+    ) -> list[dict]:
         async with self.__db.asession() as session:
             stmt = (
                 select(
@@ -278,19 +281,23 @@ class LawPageIndex:
                 .group_by(col(LawNode.law_name))
                 .order_by(col(LawNode.law_name))
             )
+            if regex is not None:
+                stmt = stmt.having(col(LawNode.law_name).regexp_match(regex))
+            if limit is not None:
+                stmt = stmt.limit(limit)
+            if offset is not None:
+                stmt = stmt.offset(offset)
             result = await session.execute(stmt)
             return [{"law_name": row[0], "article_count": row[1]} for row in result.fetchall()]
 
     async def adelete_law(self, law_name: str) -> int:
         async with self.__db.asession() as session:
-            stmt = (
-                delete(LawNode)
-                .where(col(LawNode.law_name) == law_name, col(LawNode.node_type) == "article")
-                .returning(col(LawNode.id))
+            count_stmt = select(count(col(LawNode.id))).where(
+                col(LawNode.law_name) == law_name,
+                col(LawNode.node_type) == "article",
             )
-            result = await session.execute(stmt)
-            article_count = len(result.fetchall())
-            # 删除该法律的其余节点 (章/节/序言/根)
+            result = await session.execute(count_stmt)
+            article_count = result.scalar() or 0
             await session.execute(delete(LawNode).where(col(LawNode.law_name) == law_name))
             await session.commit()
 
@@ -308,12 +315,8 @@ class LawPageIndex:
 
         while True:
             async with self.__db.asession() as session:
-                p1 = aliased(LawNode)
-                p2 = aliased(LawNode)
                 stmt = (
-                    select(LawNode, p1, p2)
-                    .join(p1, col(LawNode.parent_id) == col(p1.id), isouter=True)
-                    .join(p2, col(p1.parent_id) == col(p2.id), isouter=True)
+                    select(LawNode)
                     .where(col(LawNode.node_type).in_(EMBEDDABLE_NODE_TYPES))
                     .where(~exists(select(1).where(col(DocumentTable.node_id) == col(LawNode.id))))
                 )
@@ -322,15 +325,12 @@ class LawPageIndex:
                 stmt = stmt.order_by(col(LawNode.law_name), col(LawNode.order_index)).offset(offset).limit(batch_size)
 
                 result = await session.execute(stmt)
-                rows = result.all()
+                rows = result.scalars().all()
 
                 if not rows:
                     break
 
-                texts = [
-                    (_build_embed_text(node, node_p1, node_p2), node.id, node.law_name)
-                    for node, node_p1, node_p2 in rows
-                ]
+                texts = [(_build_embed_text(node), node.id, node.law_name) for node in rows]
 
             try:
                 chunk_count = await doc_store.abatch_load_from_texts(
@@ -342,6 +342,7 @@ class LawPageIndex:
                 total_nodes += len(rows)
             except Exception:
                 logger.exception("Failed to embed batch of %d nodes for %s", len(rows), law_name)
+                continue
 
             offset += batch_size
             logger.info("Embedded %s: %d nodes so far...", law_name, total_nodes)

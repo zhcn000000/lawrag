@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import delete, insert
@@ -72,7 +73,7 @@ class DocumentStore:
 
     async def abatch_load_from_texts(
         self,
-        texts: list[tuple[str, UUID, str | None]],
+        texts: Sequence[tuple[str, UUID, str | None]],
         chunk_size: int = 4096,
         chunk_overlap: int = 128,
     ) -> int:

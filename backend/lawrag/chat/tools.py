@@ -10,6 +10,7 @@ from lawrag.tools.base import (
     fetch_web_base,
     get_articles_under_chapter_base,
     get_law_toc_base,
+    list_laws_base,
     python_repl_base,
     search_documents_base,
     search_law_articles_base,
@@ -39,6 +40,25 @@ async def prepare_web(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> T
     if "web_toolkit" in ctx.deps.select_toolset:
         return tool_def
     return None
+
+
+@rag_toolset.tool(
+    name="list_laws",
+    description=(
+        "列出所有已导入的法律及其法条数量。支持正则过滤和分页。先调用此工具了解有哪些法律可用, 再调用其他法律查询工具。"
+    ),
+    prepare=prepare_rag,
+)
+async def list_laws(
+    ctx: RunContext[ModelDeps],
+    regex: Annotated[str | None, Field(description="正则表达式过滤法律名称, 如'刑法|民法典'")] = None,
+    limit: Annotated[int, Field(description="返回数量上限, 默认50")] = 50,
+    offset: Annotated[int, Field(description="分页偏移量, 默认0")] = 0,
+) -> Annotated[str, Field(description="返回markdown格式的法律列表")]:
+    try:
+        return await list_laws_base(regex=regex, limit=limit, offset=offset)
+    except Exception as e:
+        raise ModelRetry(f"获取法律列表失败: {e!s}") from e
 
 
 @rag_toolset.tool(

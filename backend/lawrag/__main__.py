@@ -221,7 +221,7 @@ async def spider_crawl(
         Option("--category", "-c", help="Law category to crawl"),
     ] = "all",
     output: Annotated[
-        Path | None, Option("--output", "-o", help="Output JSON path (default: data/law_index/law_index.json)")
+        Path | None, Option("--output", "-o", help="Output JSON path (default: data/law_index/law_index.json)"),
     ] = None,
 ) -> None:
     """Stage 1: Crawl the NPC law database API to build a law index.
@@ -230,7 +230,6 @@ async def spider_crawl(
     Categories: xf (宪法), flfg (法律), xzfg (行政法规), jcfg (监察法规), sfjs (司法解释).
     Use dfxfg for 地方性法规 (excluded from 'all').
     """
-
     from lawrag.spider.runner import run_law_index_spider
 
     logger.info("Running law index spider for category: %s", category)
@@ -244,10 +243,10 @@ async def spider_crawl(
 async def spider_download(
     index_path: Annotated[Path | None, Argument(help="Path to law index JSON file from 'lawrag spider crawl'")] = None,
     output_dir: Annotated[
-        Path | None, Option("--output-dir", "-o", help="Output directory for structured law files")
+        Path | None, Option("--output-dir", "-o", help="Output directory for structured law files"),
     ] = None,
     download_dir: Annotated[
-        Path | None, Option("--download-dir", "-d", help="Directory for raw downloaded docx files")
+        Path | None, Option("--download-dir", "-d", help="Directory for raw downloaded docx files"),
     ] = None,
     category: Annotated[
         Literal["xf", "flfg", "xzfg", "jcfg", "sfjs", "dfxfg", "all"] | None,

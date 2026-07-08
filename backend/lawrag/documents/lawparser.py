@@ -72,7 +72,7 @@ def _is_preamble_marker(line: str) -> bool:
 def has_parsed_content(parsed: dict) -> bool:
     """``parse_multi_level`` 结果是否含可写出的实质内容 (编/章/条/序言之一)。"""
     return bool(
-        parsed and (parsed.get("parts") or parsed.get("chapters") or parsed.get("articles") or parsed.get("preamble"))
+        parsed and (parsed.get("parts") or parsed.get("chapters") or parsed.get("articles") or parsed.get("preamble")),
     )
 
 
@@ -251,6 +251,7 @@ def parse_multi_level(content: str) -> dict:
             ],
             "articles": [...]  # top-level articles when no chapters
         }
+
     """
     lines = content.splitlines()
 

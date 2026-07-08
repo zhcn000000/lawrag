@@ -152,14 +152,8 @@ class LawNode(SQLModel, table=True):
     node_type: Annotated[str, Field(sa_column=Column(String(16), nullable=False, index=True))]
     number: Annotated[int | None, Field(sa_column=Column(Integer, nullable=True))]
     content: Annotated[str | None, Field(sa_column=Column(Text, nullable=True))]
-    order_index: Annotated[int, Field(sa_column=Column(Integer, nullable=False, server_default="0"))]
     path: Annotated[str, Field(sa_column=Column(String(256), nullable=False, server_default=""))]
     full_path: Annotated[str, Field(sa_column=Column(Text, nullable=False, server_default=""))]
-    category: Annotated[str | None, Field(sa_column=Column(String(128), nullable=True, index=True))]
-    meta: Annotated[
-        dict,
-        Field(default_factory=dict, sa_column=Column("metadata", JSONB, nullable=False, server_default="{}")),
-    ]
 
     @declared_attr
     @classmethod
@@ -168,11 +162,6 @@ class LawNode(SQLModel, table=True):
             Index(
                 "idx_law_nodes_law_name",
                 col(cls.law_name),
-            ),
-            Index(
-                "idx_law_nodes_law_name_order",
-                col(cls.law_name),
-                col(cls.order_index),
             ),
             # (law_name, path) 作为稳定的自然键, 防止同一结构节点重复插入
             Index(

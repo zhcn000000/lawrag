@@ -195,7 +195,7 @@ class LawPageIndex:
                 stmt = stmt.where(col(LawNode.number) >= start)
             if end is not None:
                 stmt = stmt.where(col(LawNode.number) <= end)
-            stmt = stmt.order_by(col(LawNode.order_index)).offset(offset).limit(limit)
+            stmt = stmt.order_by(col(LawNode.id)).offset(offset).limit(limit)
             result = await session.execute(stmt)
             return list(starmap(_article_dict, result.all()))
 
@@ -207,7 +207,7 @@ class LawPageIndex:
     ) -> list[dict]:
         async with self.__db.asession() as session:
             stmt, _, _ = self._article_query(law_name)
-            stmt = stmt.where(col(LawNode.content).ilike(f"%{query}%")).order_by(col(LawNode.order_index)).limit(limit)
+            stmt = stmt.where(col(LawNode.content).ilike(f"%{query}%")).order_by(col(LawNode.id)).limit(limit)
             result = await session.execute(stmt)
             return list(starmap(_article_dict, result.all()))
 
@@ -226,7 +226,7 @@ class LawPageIndex:
                     ((col(p1.node_type) == "chapter") & (col(p1.content) == chapter_title))
                     | ((col(p2.node_type) == "chapter") & (col(p2.content) == chapter_title)),
                 )
-                .order_by(col(LawNode.order_index))
+                .order_by(col(LawNode.id))
                 .limit(limit)
             )
             result = await session.execute(stmt)
@@ -244,7 +244,7 @@ class LawPageIndex:
                     col(LawNode.law_name) == law_name,
                     col(LawNode.node_type).in_(("part", "subpart", "chapter", "section")),
                 )
-                .order_by(col(LawNode.order_index))
+                .order_by(col(LawNode.id))
             )
             result = await session.execute(stmt)
             rows = result.scalars().all()
@@ -269,7 +269,10 @@ class LawPageIndex:
             return toc
 
     async def alist_laws(
-        self, regex: str | None = None, limit: int | None = None, offset: int | None = None
+        self,
+        regex: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> list[dict]:
         async with self.__db.asession() as session:
             stmt = (
@@ -305,7 +308,11 @@ class LawPageIndex:
             return article_count
 
     async def aembed_law_articles(
-        self, law_name: str | None = None, chunk_size: int = 4096, chunk_overlap: int = 128, batch_size: int = 64
+        self,
+        law_name: str | None = None,
+        chunk_size: int = 4096,
+        chunk_overlap: int = 128,
+        batch_size: int = 64,
     ) -> dict:
         doc_store = DocumentStore()
 
@@ -322,7 +329,7 @@ class LawPageIndex:
                 )
                 if law_name is not None:
                     stmt = stmt.where(col(LawNode.law_name) == law_name)
-                stmt = stmt.order_by(col(LawNode.law_name), col(LawNode.order_index)).offset(offset).limit(batch_size)
+                stmt = stmt.order_by(col(LawNode.law_name), col(LawNode.id)).offset(offset).limit(batch_size)
 
                 result = await session.execute(stmt)
                 rows = result.scalars().all()

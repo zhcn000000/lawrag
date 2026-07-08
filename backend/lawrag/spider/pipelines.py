@@ -32,14 +32,14 @@ class ContentDownloadPipeline:
         pipeline = cls()
         settings = crawler.settings
         pipeline.download_dir = AsyncPath(
-            settings.get("LAW_CONTENT_DOWNLOAD_DIR", env_settings.DATA_ROOT / "downloaded_laws")
+            settings.get("LAW_CONTENT_DOWNLOAD_DIR", env_settings.DATA_ROOT / "downloaded_laws"),
         )
         pipeline.structured_dir = AsyncPath(
-            settings.get("LAW_CONTENT_STRUCTURED_DIR", env_settings.DATA_ROOT / "structured_laws")
+            settings.get("LAW_CONTENT_STRUCTURED_DIR", env_settings.DATA_ROOT / "structured_laws"),
         )
         pipeline.raw_dir = AsyncPath(settings.get("LAW_CONTENT_RAW_DIR", env_settings.DATA_ROOT / "raw_laws"))
         pipeline.manifest_path = Path(
-            settings.get("LAW_CONTENT_MANIFEST_PATH", pipeline.structured_dir / ".manifest.json")
+            settings.get("LAW_CONTENT_MANIFEST_PATH", pipeline.structured_dir / ".manifest.json"),
         )
 
         return pipeline
@@ -114,7 +114,7 @@ class LawIndexPipeline:
         pipeline = cls()
         settings = crawler.settings
         pipeline.index_path = Path(
-            settings.get("LAW_INDEX_PATH", env_settings.DATA_ROOT / "law_index" / "law_index.json")
+            settings.get("LAW_INDEX_PATH", env_settings.DATA_ROOT / "law_index" / "law_index.json"),
         )
         return pipeline
 

@@ -86,7 +86,7 @@ class RAGMode:
 
         stmt = stmt.order_by(
             col(DocumentTable.bmvector).neg_bm25_rank(  # type: ignore
-                func.to_bm25query("idx_documents_bmvector", cast(query_count, BM25Vector)),
+                func.to_bm25query("ix_documents_bmvector", cast(query_count, BM25Vector)),
             ),
         ).limit(topn)
 

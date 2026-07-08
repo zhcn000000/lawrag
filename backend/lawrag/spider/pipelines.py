@@ -5,7 +5,6 @@ import logging
 from pathlib import Path
 
 from markitdown import MarkItDown
-from scrapy import Spider
 
 from lawrag.documents.lawparser import parse_multi_level, write_structured_law
 from lawrag.spider.items import LawDownloadItem, LawIndexItem
@@ -20,6 +19,7 @@ class ContentDownloadPipeline:
     download_dir: Path | None = None
     structured_dir: Path | None = None
     raw_dir: Path | None = None
+    manifest_path: Path | None = None
     md: MarkItDown = MarkItDown()
 
     def __init__(self) -> None:
@@ -36,7 +36,9 @@ class ContentDownloadPipeline:
             settings.get("LAW_CONTENT_STRUCTURED_DIR", env_settings.DATA_ROOT / "structured_laws")
         )
         pipeline.raw_dir = Path(settings.get("LAW_CONTENT_RAW_DIR", env_settings.DATA_ROOT / "raw_laws"))
-
+        pipeline.manifest_path = Path(
+            settings.get("LAW_CONTENT_MANIFEST_PATH", pipeline.structured_dir / ".manifest.json")
+        )
         for dir_path in (pipeline.download_dir, pipeline.structured_dir, pipeline.raw_dir):
             dir_path.mkdir(parents=True, exist_ok=True)
 
@@ -88,10 +90,10 @@ class ContentDownloadPipeline:
 
         return item
 
-    def close_spider(self, spider: Spider) -> None:
-        manifest_path = spider.crawler.settings.get("LAW_CONTENT_MANIFEST_PATH", "")
-        if manifest_path and self._results:
-            output = Path(manifest_path)
+    def close_spider(self) -> None:
+        assert self.manifest_path is not None, "manifest_path must be set"
+        if self.manifest_path and self._results:
+            output = Path(self.manifest_path)
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(json.dumps(self._results, ensure_ascii=False, indent=2), encoding="utf-8")
             ok = sum(1 for r in self._results if r["status"] == "ok")
@@ -101,8 +103,19 @@ class ContentDownloadPipeline:
 class LawIndexPipeline:
     """Pipeline that collects law index items and incrementally upserts to a single JSON file."""
 
+    index_path: Path | None = None
+
     def __init__(self) -> None:
         self._items: dict[str, dict] = {}
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        pipeline = cls()
+        settings = crawler.settings
+        pipeline.index_path = Path(
+            settings.get("LAW_INDEX_PATH", env_settings.DATA_ROOT / "law_index" / "law_index.json")
+        )
+        return pipeline
 
     def process_item(self, item: LawIndexItem) -> LawIndexItem:
         law_id = item.get("law_id", "")
@@ -122,29 +135,24 @@ class LawIndexPipeline:
             self._items[law_id] = entry
         return item
 
-    def close_spider(self, spider: Spider) -> None:
+    def close_spider(self) -> None:
+        assert self.index_path is not None, "index_path must be set"
         if not self._items:
             return
-
-        output_path = spider.crawler.settings.get(
-            "LAW_INDEX_PATH",
-            env_settings.DATA_ROOT / "law_index" / "law_index.json",
-        )
-        output_file = Path(output_path)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
+        self.index_path.parent.mkdir(parents=True, exist_ok=True)
 
         existing: dict[str, dict] = {}
-        if output_file.exists():
+        if self.index_path.exists():
             try:
-                with output_file.open("r", encoding="utf-8") as f:
+                with self.index_path.open("r", encoding="utf-8") as f:
                     data = json.load(f)
                 for entry in data:
                     lid = entry.get("law_id", "")
                     if lid:
                         existing[lid] = entry
-                logger.info("Loaded %d existing entries from %s", len(existing), output_file)
+                logger.info("Loaded %d existing entries from %s", len(existing), self.index_path)
             except json.JSONDecodeError, OSError:
-                logger.warning("Could not read existing %s, starting fresh", output_file)
+                logger.warning("Could not read existing %s, starting fresh", self.index_path)
 
         merged = {**existing, **self._items}
         new_count = len(self._items)
@@ -155,9 +163,9 @@ class LawIndexPipeline:
             new_count - updated_count,
             updated_count,
             total_count,
-            output_file,
+            self.index_path,
         )
 
         entries = sorted(merged.values(), key=lambda e: (e.get("category", ""), e.get("law_name", "")))
-        with output_file.open("w", encoding="utf-8") as f:
+        with self.index_path.open("w", encoding="utf-8") as f:
             json.dump(entries, f, ensure_ascii=False, indent=2)

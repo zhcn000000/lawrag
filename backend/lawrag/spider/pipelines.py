@@ -4,6 +4,8 @@ import json
 import logging
 from pathlib import Path
 
+from anyio import Path as AsyncPath
+from asyncer import asyncify
 from markitdown import MarkItDown
 
 from lawrag.documents.lawparser import parse_multi_level, write_structured_law
@@ -16,9 +18,9 @@ logger = logging.getLogger(__name__)
 class ContentDownloadPipeline:
     """Save downloaded law files to disk, convert to text, parse, and write structured output."""
 
-    download_dir: Path | None = None
-    structured_dir: Path | None = None
-    raw_dir: Path | None = None
+    download_dir: AsyncPath | None = None
+    structured_dir: AsyncPath | None = None
+    raw_dir: AsyncPath | None = None
     manifest_path: Path | None = None
     md: MarkItDown = MarkItDown()
 
@@ -29,42 +31,41 @@ class ContentDownloadPipeline:
     def from_crawler(cls, crawler):
         pipeline = cls()
         settings = crawler.settings
-        pipeline.download_dir = Path(
+        pipeline.download_dir = AsyncPath(
             settings.get("LAW_CONTENT_DOWNLOAD_DIR", env_settings.DATA_ROOT / "downloaded_laws")
         )
-        pipeline.structured_dir = Path(
+        pipeline.structured_dir = AsyncPath(
             settings.get("LAW_CONTENT_STRUCTURED_DIR", env_settings.DATA_ROOT / "structured_laws")
         )
-        pipeline.raw_dir = Path(settings.get("LAW_CONTENT_RAW_DIR", env_settings.DATA_ROOT / "raw_laws"))
+        pipeline.raw_dir = AsyncPath(settings.get("LAW_CONTENT_RAW_DIR", env_settings.DATA_ROOT / "raw_laws"))
         pipeline.manifest_path = Path(
             settings.get("LAW_CONTENT_MANIFEST_PATH", pipeline.structured_dir / ".manifest.json")
         )
-        for dir_path in (pipeline.download_dir, pipeline.structured_dir, pipeline.raw_dir):
-            dir_path.mkdir(parents=True, exist_ok=True)
 
         return pipeline
 
-    def process_item(self, item: LawDownloadItem) -> LawDownloadItem:
+    async def process_item(self, item: LawDownloadItem) -> LawDownloadItem:
         assert self.download_dir is not None, "download_dir must be set"
         assert self.structured_dir is not None, "structured_dir must be set"
         assert self.raw_dir is not None, "raw_dir must be set"
 
-        self.download_dir.mkdir(parents=True, exist_ok=True)
-        self.structured_dir.mkdir(parents=True, exist_ok=True)
+        await self.download_dir.mkdir(parents=True, exist_ok=True)
+        await self.structured_dir.mkdir(parents=True, exist_ok=True)
+        await self.raw_dir.mkdir(parents=True, exist_ok=True)
 
         law_name: str = item["law_name"]
-        output_path = self.download_dir / item["filename"]
+        output_path: AsyncPath = self.download_dir / item["filename"]
 
-        if not output_path.exists():
-            output_path.write_bytes(item["file_content"])
+        if not await output_path.exists():
+            await output_path.write_bytes(item["file_content"])
             logger.info("Downloaded: %s -> %s", law_name, output_path)
 
         try:
             ext = item["extension"]
             if ext == ".html":
-                text = output_path.read_text(encoding="utf-8")
+                text = await output_path.read_text(encoding="utf-8")
             elif ext in (".docx", ".doc"):
-                result = self.md.convert(str(output_path))
+                result = await asyncify(self.md.convert)(Path(output_path))
                 text = result.text_content
             else:
                 logger.warning("Unsupported format %s for %s", ext, law_name)
@@ -74,7 +75,7 @@ class ContentDownloadPipeline:
             if not text:
                 self._results.append({"law_name": law_name, "status": "failed", "output": None})
                 return item
-            (self.raw_dir / f"{law_name}.txt").write_text(text, encoding="utf-8")
+            await (self.raw_dir / f"{law_name}.txt").write_text(text, encoding="utf-8")
 
             parsed = parse_multi_level(text)
             if not parsed or (not parsed.get("articles") and not parsed.get("chapters") and not parsed.get("preamble")):
@@ -82,7 +83,7 @@ class ContentDownloadPipeline:
                 self._results.append({"law_name": law_name, "status": "failed", "output": None})
                 return item
 
-            structured = write_structured_law(parsed=parsed, output_dir=self.structured_dir, law_name=law_name)
+            structured = await write_structured_law(parsed=parsed, output_dir=self.structured_dir, law_name=law_name)
             self._results.append({"law_name": law_name, "status": "ok", "output": str(structured)})
         except Exception:
             logger.exception("Failed to process %s", law_name)
@@ -92,12 +93,12 @@ class ContentDownloadPipeline:
 
     def close_spider(self) -> None:
         assert self.manifest_path is not None, "manifest_path must be set"
+
         if self.manifest_path and self._results:
-            output = Path(self.manifest_path)
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(json.dumps(self._results, ensure_ascii=False, indent=2), encoding="utf-8")
+            self.manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            self.manifest_path.write_text(json.dumps(self._results, ensure_ascii=False, indent=2), encoding="utf-8")
             ok = sum(1 for r in self._results if r["status"] == "ok")
-            logger.info("Content download done: %d OK, %d total -> %s", ok, len(self._results), output)
+            logger.info("Content download done: %d OK, %d total -> %s", ok, len(self._results), self.manifest_path)
 
 
 class LawIndexPipeline:

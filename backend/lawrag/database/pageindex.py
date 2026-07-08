@@ -43,10 +43,10 @@ def _article_dict(article: LawNode, p1: LawNode | None, p2: LawNode | None) -> d
         "law_name": article.law_name,
         "article_number": article.number,
         "content": article.content or "",
+        "chapter_title": chapter.content if chapter else None,
         "chapter_number": chapter.number if chapter else None,
-        "chapter_title": chapter.title if chapter else None,
         "section_number": section.number if section else None,
-        "section_title": section.title if section else None,
+        "section_title": section.content if section else None,
     }
 
 
@@ -122,8 +122,7 @@ class LawPageIndex:
                 "parent_id": ids[n["parent"]] if n["parent"] is not None else None,
                 "node_type": n["node_type"],
                 "number": n["number"],
-                "title": n["title"],
-                "content": n["content"],
+                "content": n["title"] or n["content"],
                 "order_index": i,
                 "path": n["path"],
                 "full_path": full_paths[i],
@@ -223,8 +222,8 @@ class LawPageIndex:
             stmt = (
                 stmt
                 .where(
-                    ((col(p1.node_type) == "chapter") & (col(p1.title) == chapter_title))
-                    | ((col(p2.node_type) == "chapter") & (col(p2.title) == chapter_title)),
+                    ((col(p1.node_type) == "chapter") & (col(p1.content) == chapter_title))
+                    | ((col(p2.node_type) == "chapter") & (col(p2.content) == chapter_title)),
                 )
                 .order_by(col(LawNode.order_index))
                 .limit(limit)
@@ -253,7 +252,7 @@ class LawPageIndex:
                 row.id: {
                     "node_type": row.node_type,
                     "number": row.number,
-                    "title": row.title,
+                    "title": row.content,
                     "children": [],
                     "_parent": row.parent_id,
                 }

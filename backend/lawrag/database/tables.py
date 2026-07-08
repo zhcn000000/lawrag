@@ -109,8 +109,7 @@ class LawNode(SQLModel, table=True):
 
     node_type 取值: "law"(根) / "preamble"(序言) / "part"(编) / "subpart"(分编)
     / "chapter"(章) / "section"(节) / "article"(条).
-    - part/subpart/chapter/section 使用 title 存标题, content 为空;
-    - article/preamble 使用 content 存正文, title 为空;
+    - part/subpart/chapter/section/article/preamble 使用 content 存文本内容;
     - number 为编/分编/章/节/条的序号 (中文数字转整数);
     - order_index 保留原文顺序, 用于稳定排序与还原层级;
     - path 为同一部法律内唯一的物化路径 (materialized path), 配合
@@ -129,16 +128,6 @@ class LawNode(SQLModel, table=True):
             ),
         ),
     ]
-    law_name: Annotated[
-        str,
-        Field(
-            sa_column=Column(
-                String(512),
-                nullable=False,
-                index=True,
-            ),
-        ),
-    ]
     parent_id: Annotated[
         UUID | None,
         Field(
@@ -150,9 +139,18 @@ class LawNode(SQLModel, table=True):
             ),
         ),
     ]
+    law_name: Annotated[
+        str,
+        Field(
+            sa_column=Column(
+                String(512),
+                nullable=False,
+                index=True,
+            ),
+        ),
+    ]
     node_type: Annotated[str, Field(sa_column=Column(String(16), nullable=False, index=True))]
     number: Annotated[int | None, Field(sa_column=Column(Integer, nullable=True))]
-    title: Annotated[str | None, Field(sa_column=Column(Text, nullable=True))]
     content: Annotated[str | None, Field(sa_column=Column(Text, nullable=True))]
     order_index: Annotated[int, Field(sa_column=Column(Integer, nullable=False, server_default="0"))]
     path: Annotated[str, Field(sa_column=Column(String(256), nullable=False, server_default=""))]

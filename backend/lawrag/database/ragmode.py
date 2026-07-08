@@ -30,7 +30,7 @@ def _node_label(node: LawNode) -> str:
         return "序言"
     unit = _NODE_LABEL_UNIT.get(node.node_type, "")
     head = f"第{node.number}{unit}" if node.number is not None else unit
-    return f"{head} {node.title}".strip() if node.title else head
+    return f"{head} {node.content}".strip() if node.content else head
 
 
 def _node_breadcrumb(node: LawNode, node_map: dict[UUID, LawNode]) -> str:

@@ -368,7 +368,45 @@ def parse_multi_level(content: str) -> dict:
                     break
         body_lines = lines[body_start:]
     else:
-        body_lines = lines
+        # 无"目录"标记: 尝试检测隐式目录
+        # (章/节标题在第一条法条前出现两次, 第一次为目录, 第二次才是正文)
+        first_article_idx = next(
+            (i for i, line in enumerate(lines) if ARTICLE_HEADING_PAT.match(line.strip())),
+            len(lines),
+        )
+        heading_key: set[tuple[str, int, str]] = set()
+        dup_start = -1
+        for i in range(first_article_idx):
+            stripped = lines[i].strip()
+            key: tuple[str, int, str] | None = None
+            for pat, kind in (
+                (CHAPTER_PATTERN, "chapter"),
+                (SECTION_PATTERN, "section"),
+                (PART_PATTERN, "part"),
+                (SUBPART_PATTERN, "subpart"),
+            ):
+                m = pat.match(stripped)
+                if m:
+                    title = m.group(2).strip()
+                    if not title or title[0] in "的第之中。，、；":
+                        break
+                    key = (kind, cn_to_int(m.group(1)), title)
+                    break
+            if key is not None:
+                if key in heading_key:
+                    dup_start = i
+                else:
+                    heading_key.add(key)
+        # 第一条法条前有重复的章/节标题 → 前半部分为目录, 从最后重复行之前一行开始
+        if dup_start >= 0:
+            body_start = dup_start
+            for k in range(dup_start - 1, -1, -1):
+                if lines[k].strip():
+                    body_start = k
+                    break
+            body_lines = lines[body_start:]
+        else:
+            body_lines = lines
 
     # Line splitting pattern: only split on article and chapter boundaries
     # Section headings naturally appear on their own lines, so we don't split on 第X节

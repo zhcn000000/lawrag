@@ -7,7 +7,6 @@ repos:
         entry: uv --directory backend run ruff check
         language: system
         types_or: [python, pyi, jupyter, pyproj]
-        exclude: "tests/.*"
         args: [--fix]
         pass_filenames: false
         require_serial: true
@@ -17,7 +16,6 @@ repos:
         entry: uv --directory backend run ruff check
         language: system
         types_or: [python, pyi, jupyter, pyproj]
-        exclude: "tests/.*"
         args: [--fix, --select, ALL, --fix-only]
         pass_filenames: false
         require_serial: true
@@ -28,7 +26,6 @@ repos:
         entry: uv --directory backend run ruff format
         language: system
         types_or: [python, pyi, jupyter]
-        exclude: "^tests/.*"
         args: []
         pass_filenames: false
         require_serial: true
@@ -39,7 +36,6 @@ repos:
         entry: uv --directory backend run ty check
         language: system
         types_or: [python, pyi, jupyter]
-        exclude: "tests/.*"
         args: [--fix]
         pass_filenames: false
         require_serial: true

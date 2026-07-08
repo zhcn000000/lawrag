@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from dotenv import load_dotenv
@@ -47,6 +47,7 @@ class EnvironmentSettings(BaseSettings):
     JWT_SECRET: SecretStr = SecretStr("knowgraph-jwt-secret-change-in-production")
     SSL_KEY_PATH: Path | None = None
     SSL_CERT_PATH: Path | None = None
+    LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     model_config = SettingsConfigDict(env_ignore_empty=True, env_file=env_file, extra="ignore")
 
     def model_post_init(self, context):

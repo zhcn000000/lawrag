@@ -57,7 +57,9 @@ class ContentDownloadSpider(Spider):
         content = await idx.read_text(encoding="utf-8")
         law_list: list[dict] = json.loads(content)
         logger.info("Loaded %d laws from index: %s", len(law_list), self._index_path)
-        current_files = {f.stem async for f in AsyncPath(self.settings.get("LAW_CONTENT_STRUCTURED_DIR")).iterdir()}
+        structured_dir = AsyncPath(self.settings.get("LAW_CONTENT_STRUCTURED_DIR"))
+        await structured_dir.mkdir(parents=True, exist_ok=True)
+        current_files = {f.stem async for f in structured_dir.iterdir()}
         for entry in law_list:
             if self._category and entry.get("category") != self._category:
                 continue

@@ -157,6 +157,7 @@ class LawPageIndex:
         for file_path in paths:
             if await file_path.is_file() and not file_path.name.startswith("."):
                 try:
+                    logger.info("Importing %s...", file_path)
                     result = await self.aimport_file(file_path=file_path)
                     results.append(result)
                 except Exception:

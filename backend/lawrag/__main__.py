@@ -290,7 +290,6 @@ async def spider_crawl(
     Categories: xf (宪法), flfg (法律), xzfg (行政法规), jcfg (监察法规), sfjs (司法解释).
     Use dfxfg for 地方性法规 (excluded from 'all').
     """
-
     logger.info("Running law index spider for category: %s", category)
 
     await run_law_index_spider(category=category, output=output)
@@ -319,7 +318,6 @@ async def spider_download(
     Downloads docx/HTML from NPC database, converts to text,
     and parses multi-level structure (chapters/sections/articles).
     """
-
     if index_path is None:
         index_path = settings.DATA_ROOT / "law_index" / "law_index.json"
 
@@ -349,7 +347,7 @@ def main():
 
     logging.basicConfig(
         handlers=[RichHandler(rich_tracebacks=True)],
-        level=logging.INFO,
+        level=settings.LOG_LEVEL,
     )
     cmd()
 

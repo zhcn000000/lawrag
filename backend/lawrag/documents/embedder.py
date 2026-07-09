@@ -3,11 +3,13 @@ from collections.abc import Sequence
 
 from httpx import AsyncClient, HTTPError, HTTPStatusError
 
+from lawrag.environments import settings
+
 from .models import Document
 
 logger = logging.getLogger(__name__)
 
-MODEL_URL = "https://nw.lonwell.cn:10001"
+MODEL_URL = str(settings.LLM_LINK).removesuffix("/")
 EMBEDDING_UID = "qwen3-embedding"
 RERANKER_UID = "qwen3-reranker"
 EMBEDDING_DIMS = 4096
@@ -76,7 +78,7 @@ async def aembed_documents(
         "dimensions": EMBEDDING_DIMS,
     }
 
-    results = await _retry_post(f"{MODEL_URL}/v1/embeddings", json=payload, headers=headers)
+    results = await _retry_post(f"{MODEL_URL}/embeddings", json=payload, headers=headers)
     return [obj["embedding"] for obj in results["data"]]
 
 
@@ -107,7 +109,7 @@ async def arerank_scores(
         "return_documents": False,
     }
 
-    results = await _retry_post(f"{MODEL_URL}/v1/rerank", json=payload, headers=headers)
+    results = await _retry_post(f"{MODEL_URL}/rerank", json=payload, headers=headers)
     return {item["index"]: item["relevance_score"] for item in results["results"]}
 
 

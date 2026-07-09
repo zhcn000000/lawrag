@@ -18,19 +18,23 @@
 ```
 frontend/
 ├── index.html             # 入口 HTML（#root，main.tsx）
-├── vite.config.ts         # 代理 /api -> FASTAPI_HOST:FASTAPI_PORT
+├── vite.config.ts         # base="/webui/"，代理 /api -> FASTAPI_HOST:FASTAPI_PORT
 ├── biome.json             # 格式化 + Lint 配置
 ├── tsconfig.json          # 路径别名 @ -> src
 └── src/
-    ├── main.tsx           # 渲染入口（Provider / ConfigProvider / 路由 / ProtectedRoute）
+    ├── main.tsx           # 渲染入口（Provider / ConfigProvider / BrowserRouter basename="/webui" / ProtectedRoute）
     ├── App.tsx            # 备用顶层 App（main.tsx 当前为主）
     ├── layouts/           # MainLayout
-    ├── pages/             # LoginPage / DashboardPage / ChatPage / DocumentUploadPage
-    ├── components/        # SuperMarkdown 等
-    ├── api/               # auth / chat / session / documents / types
+    ├── pages/             # LoginPage / DashboardPage / ChatPage
+    ├── components/        # SuperMarkdown（Markdown + Mermaid + Infographic 渲染）
+    ├── api/               # auth / chat / session / types
     ├── store/             # Redux store + slices（authSlice）
-    └── utils/             # request.ts fetch 封装
+    └── utils/             # request.ts (fetch 封装) / navigateRef.ts (非组件内跳转桥接)
 ```
+
+Vite 把构建产物以 `base: "/webui/"` 输出，本地开发时通过 `/api` 代理访问后端；
+构建后由顶层 `just build-ui` 把 `frontend/dist/` 拷贝到仓库根 `static/`，
+由后端 FastAPI 在 `/webui/*` 路径挂载。`react-router` 也使用 `basename="/webui"` 对齐。
 
 ## 开发命令
 

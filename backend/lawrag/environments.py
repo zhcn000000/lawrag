@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from dotenv import load_dotenv
-from pydantic import Field, PostgresDsn, SecretStr
+from pydantic import Field, HttpUrl, PostgresDsn, SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 os.environ.setdefault("USER_AGENT", "Chrome/139.0.2171.99 Safari/537.36")
@@ -29,15 +29,18 @@ if not env_file.exists():
     env_file = None
 
 
-class EnvironmentSettings(BaseSettings):
+class EnvironmentSettings(BaseSettings):  # pyright: ignore
     FASTAPI_HOST: str = "127.0.0.1"
     FASTAPI_PORT: int = 40001
     POSTGRES_HOST: str = "127.0.0.1"
     POSTGRES_PORT: int = 10004
     POSTGRES_USER: str = "postgres"
     POSTGRES_DB: str = "data"
-    POSTGRES_DSN: PostgresDsn | None = None
     POSTGRES_PASSWORD: SecretStr = SecretStr("postgres_password")
+    LLM_PROTOCOL: Literal["http", "https"] = "http"
+    LLM_HOST: str = "127.0.0.1"
+    LLM_PORT: int = 40002
+    USE_SELFHOSTED_LLM: bool = False
     DATA_ROOT: Annotated[Path, Field(alias="LAWRAG_DATA_ROOT")] = find_project_directory() / "data"
     UUID_SEED: Annotated[UUID, Field(alias="LAWRAG_UUID_SEED")] = UUID("11fa063e-b366-41a9-ac97-439b0a561846")
     RELEASE_MODE: Annotated[bool, Field(alias="RAG_RELEASE_MODE")] = True
@@ -49,24 +52,27 @@ class EnvironmentSettings(BaseSettings):
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     model_config = SettingsConfigDict(env_ignore_empty=True, env_file=env_file, extra="ignore")
 
-    def model_post_init(self, context):
-        if not self.RELEASE_MODE:
-            import warnings
+    @computed_field
+    @property
+    def POSTGRES_DSN(self) -> PostgresDsn:  # noqa: N802
+        return PostgresDsn.build(
+            scheme="postgresql+psycopg",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD.get_secret_value(),
+            host=self.POSTGRES_HOST,
+            port=self.POSTGRES_PORT,
+            path=self.POSTGRES_DB,
+        )
 
-            warnings.warn(
-                "Running in DEVELOPMENT mode",
-                UserWarning,
-                stacklevel=2,
-            )
-        if self.POSTGRES_DSN is None:
-            self.POSTGRES_DSN = PostgresDsn.build(
-                scheme="postgresql+psycopg",
-                username=self.POSTGRES_USER,
-                password=self.POSTGRES_PASSWORD.get_secret_value(),
-                host=self.POSTGRES_HOST,
-                port=self.POSTGRES_PORT,
-                path=self.POSTGRES_DB,
-            )
+    @computed_field
+    @property
+    def LLM_LINK(self) -> HttpUrl:  # noqa: N802
+        return HttpUrl.build(
+            scheme=self.LLM_PROTOCOL,
+            host=self.LLM_HOST,
+            port=self.LLM_PORT,
+            path="/v1",
+        )
 
 
 settings = EnvironmentSettings()

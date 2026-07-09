@@ -6,17 +6,19 @@ Python 3.14 后端，基于 FastAPI + pydantic-ai 的法律 RAG 系统。
 
 - **运行时**: Python >= 3.14, < 3.15
 - **Web 框架**: FastAPI + uvicorn (5 workers, uvloop)
-- **AI 编排**: pydantic-ai (默认模型 `deepseek-v4-flash` via DeepSeekProvider，依赖 `DEEPSEEK_API_KEY`)
-- **嵌入/重排**: qwen3-embedding (4096 维) + qwen3-reranker，通过本地 `https://nw.lonwell.cn:10001` 的 OpenAI 兼容接口
-- **数据库**: PostgreSQL 16 + `pgvector` (`vector/halfvec/sparsevec/bit/hstore`) + `vchord` / `vchord_bm25` 提供向量 + BM25 索引；SQLAlchemy/SQLModel 异步
-- **CLI**: typer (入口 `lawrag`，定义在 `lawrag/__main__.py:285`)
+- **AI 编排**: pydantic-ai；首选自托管 vLLM (`chat/chat_model.py` 中 `VLLMChatModel` + `VLLMProvider`，默认 `qwen3.5`)，通过环境变量开关 `USE_SELFHOSTED_LLM=True` 启用；未启用时回退到 `deepseek-v4-flash via DeepSeekProvider`（依赖 `DEEPSEEK_API_KEY`，可选）。`chat/model.py:20-26` 决定实际用哪个 provider
+- **嵌入/重排**: `qwen3-embedding` (4096 维) + `qwen3-reranker`，统一通过同一个 OpenAI 兼容端点 `LLM_LINK`（默认 `http://127.0.0.1:40002/v1`），路径 `/v1/embeddings` 与 `/v1/rerank`。`documents/embedder.py:12` 用 `settings.LLM_LINK` 拼接 URL，与 chat 模型共用同一部署
+- **数据库**: PostgreSQL 18 + `pgvector` (`vector/halfvec/sparsevec/bit/hstore`) + `vchord` / `vchord_bm25` 提供向量 + BM25 索引；SQLAlchemy/SQLModel 异步
+- **CLI**: typer（入口 `lawrag`）
 - **爬虫**: scrapy (AsyncCrawlerRunner, 无 Twisted reactor) + selenium (可选) 抓取 NPC 法律法规数据库
 - **文档解析**: lxml, beautifulsoup4, markitdown（docx/html → markdown）
 - **NLP**: spacy + zh_core_web_trf（句切分 / BM25 分词）
 - **BM25**: mmh3 哈希到 1_000_000 词表 + `vchord_bm25` 索引 + RRF 融合
 - **代码沙盒**: pydantic-monty（受限 Python REPL，仅可用 sys/typing/asyncio）
-- **Web 搜索**: exa-py
+- **Web 搜索**: exa-py（`search_web`）+ httpx + BeautifulSoup（`fetch_web`）
 - **鉴权**: pyjwt (HS256) + PostgreSQL `crypt()/gen_salt('bf')` 存密码哈希
+- **评估**: pydantic-evals + LLMJudge（`backend/lawrag/eval/dataset.py` 内置 100 条样例）
+- **前端资源**: FastAPI 把仓库根 `static/`（由 `just build-ui` 产出）挂载到 `/webui/*`
 
 ## 项目结构
 
@@ -24,19 +26,24 @@ Python 3.14 后端，基于 FastAPI + pydantic-ai 的法律 RAG 系统。
 backend/
 ├── lawrag/
 │   ├── __init__.py            # 重新导出 FastAPI app
-│   ├── __main__.py            # CLI 入口 (start/database/search/spider/pageindex)
+│   ├── __main__.py            # CLI 入口 (start / search / database / spider / pageindex / eval)
 │   ├── routers/
-│   │   ├── __init__.py        # FastAPI app + auth (login/register/refresh/me) + /static
+│   │   ├── __init__.py        # FastAPI app + auth (login/register/refresh/me) + /webui/* 静态挂载
 │   │   ├── chat.py            # 流式 SSE chat (/api/chat/{session_id}/stream), 历史/会话/标题
 │   │   ├── rag.py             # /api/rag/search 与 /api/rag/pageindex/* REST 接口
 │   │   ├── user.py            # /api/users CRUD
 │   │   └── schema.py          # 所有 Pydantic 请求/响应模型
 │   ├── chat/
-│   │   ├── model.py           # pydantic-ai Agent 装配 (DeepSeekProvider + toolsets)
+│   │   ├── model.py           # pydantic-ai Agent 装配 (USE_SELFHOSTED_LLM 切 vLLM / 回退 DeepSeekProvider + toolsets)
+│   │   ├── chat_model.py      # 自托管 vLLM 适配层: VLLMChatModel + VLLMProvider + get_model() (默认 qwen3.5)
 │   │   ├── struct.py          # ModelDeps (select_toolset)
 │   │   ├── rag_tools.py       # rag_toolset: list_laws / search_documents / get_article_by_path / get_law_articles / get_law_toc / browse_law
 │   │   ├── code_tools.py      # code_toolset: python_repl (pydantic-monty)
-│   │   └── web_tools.py       # web_toolset: search_web / extract_web / crawl_web / fetch_web (exa + httpx + bs4)
+│   │   ├── web_tools.py       # web_toolset: search_web (exa) / fetch_web (httpx + bs4)
+│   │   └── subagent_tools.py  # subagent_toolset: subagent 调度 explore_agent / general_agent
+│   ├── eval/                  # 评测：pydantic-evals + LLMJudge 内置 100 条法律问答样本
+│   │   ├── dataset.py         #   100 条 Case (以 `pydantic_evals.Dataset` 暴露 `cases/get_dataset`)
+│   │   └── eval.py            #   evaluate(): 跑 Agent + LLMJudge，返回 LawRagCaseReport 列表
 │   ├── database/
 │   │   ├── __init__.py        # 导出 UserManager / init_db / reset_db / clean_db
 │   │   ├── database.py        # DatabaseManager (asession/acursor/aengine)
@@ -104,12 +111,11 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 顶层：
 
 - `start` — uvicorn 启动 FastAPI（5 workers，HTTPS 可选，加载 `.env` 解析 `SSL_KEY_PATH`/`SSL_CERT_PATH`）。
+- `search <query> [-k N]` — 走 `RAGMode.ahyprid_search` 的混合检索，结果用 rich 表格展示 score/title/content。
 
 `database init|reset|clean [-d DB]` — 创建/重置/删除数据库。
 
 - `init` 安装扩展 `pgcrypto`、`vchord`、`vchord_bm25`；创建默认账号 `admin/admin`。
-
-`search <query> [-k N]` — 走 `RAGMode.ahyprid_search` 的混合检索，结果用 rich 表格展示 score/title/content。
 
 `spider crawl` — NPC 法律法规库索引爬虫：
 
@@ -132,10 +138,12 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 - `list`
 - `show <law_name> [-s START] [-e END] [-l LIMIT]`
 - `toc <law_name>`（编/分编/章/节 树）
-- `search <law_name> <query> [-l LIMIT]`（按 content ILIKE 过滤）
+- `search <law_name> <query> [-l LIMIT]`（按 content ILIKE 过滤；**注意**：`__main__.pageindex_search` 是顶层命令，此处为局部 ILIKE 过滤，名称易混淆）
 - `embed [law_name] [-s CHUNK_SIZE] [-o CHUNK_OVERLAP] [-b BATCH_SIZE]`（走 `LawPageIndex.aembed_law_articles` → `DocumentStore.abatch_load_from_texts`）
 
-仓库根目录 `justfile` 一键命令：`just web` / `just initdb` / `just ingest-dir <DIR> [CATEGORY]` / `backend-format|lint|typecheck`。
+`eval run [-n MAX_CASES] [-o OUTPUT]` — 跑 `lawrag.eval.dataset.cases` 中的法律问答样本：用 Agent 生成答案并与标准答案对比，由 LLMJudge 打分；结果以 rich 表格展示并以 JSON 写入 `<DATA_ROOT>/eval/report.json`。内置 100 条以《劳动合同法》为主的 Case。
+
+仓库根目录 `justfile` 一键命令：`just web` / `just initdb` / `just eval` / `backend-format|lint|typecheck` 等（详见仓库根 `justfile`）。
 
 ## 配置
 
@@ -154,7 +162,10 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 | `RAG_TOKEN_EXPIRES_IN` | – | `21600`（秒，6 小时） |
 | `JWT_SECRET` | – | 默认值，生产必须改 |
 | `SSL_KEY_PATH` / `SSL_CERT_PATH` | – | 可选 HTTPS |
-| `DEEPSEEK_API_KEY` | – | 缺失时 Agent 无法工作（`lawrag/chat/model.py:16`） |
+| `LLM_PROTOCOL` / `LLM_HOST` / `LLM_PORT` | – | `http` / `127.0.0.1` / `40002`；拼接成 `LLM_LINK = <scheme>://<host>:<port>/v1`，供 `chat/chat_model.py` 与 `documents/embedder.py` 复用 |
+| `LLM_LINK` | – | computed，由上面三个变量派生 (`HttpUrl`)，含尾随 `/v1` |
+| `USE_SELFHOSTED_LLM` | – | `False`；为 `True` 时 `chat/model.py` 选用自托管 vLLM (`chat/chat_model.py`) |
+| `DEEPSEEK_API_KEY` | – | `USE_SELFHOSTED_LLM=False` 时的回退 provider；缺失则 Agent 不可用（`lawrag/chat/model.py:22-26`） |
 | `USER_AGENT` | – | 默认 Chrome UA（覆盖爬虫反爬） |
 
 `find_project_directory()` 会沿父目录向上寻找 `.proj_root` 标记文件；找到后 `os.chdir` 至该目录，确保数据库脚本与相对路径一致。
@@ -179,6 +190,7 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 ## 构建产物
 
 - `uv_build` 后端，包名 `lawrag`，CLI 入口 `lawrag.__main__:main`，见 `pyproject.toml:44-49`。
-- Docker 镜像：`docker/web/Dockerfile` 与 `docker/podman-compose.yml`，`web` 服务端口 `40001 -> 8080`。
-- 数据库镜像：`docker/podman-compose.yml` 中 `database` 服务（本地端口 `10004`）。
+- 前端构建产物由 FastAPI 在 `/webui/*` 路径直接挂载（仓库根 `static/` 目录，`routers/__init__.py:26-44`）。如未构建会返回 404。
+- Docker 镜像：`docker/web/Dockerfile` 与 `docker-compose.yaml`，`web` 服务端口 `40001 -> 8080`（同时挂载 `web-volume -> /app/data`，与数据库用 `app-network` 互联）。
+- 数据库镜像：`docker-compose.yaml` 中 `database` 服务（本地端口 `40002`），使用 `localhost/postgres-age:latest`（PostgreSQL 18 + `pgcrypto` + `vchord` + `vchord_bm25`）。
 - 顶层 `just docker` 同时拉起 web 与 database（`podman-compose up`）。

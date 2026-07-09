@@ -6,6 +6,9 @@ from pydantic_ai import Agent, ModelSettings, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.deepseek import DeepSeekProvider
 
+from lawrag.environments import settings
+
+from .chat_model import get_model
 from .code_tools import code_capability
 from .rag_tools import rag_capability
 from .struct import TOOL_REGISTRY, ModelDeps
@@ -14,7 +17,9 @@ from .web_tools import web_capability
 
 logger = logging.getLogger(__name__)
 
-if os.environ.get("DEEPSEEK_API_KEY"):
+if settings.USE_SELFHOSTED_LLM:
+    model = get_model()
+elif os.environ.get("DEEPSEEK_API_KEY"):
     model = OpenAIChatModel(model_name="deepseek-v4-flash", provider=DeepSeekProvider())
 else:
     model = None
@@ -73,12 +78,24 @@ def get_model_settings(
             temperature=temperature or 1.0,
             top_p=top_p or 0.95,
             presence_penalty=presence_penalty or 1.5,
-            extra_body={"thinking": {"type": "enabled"}},
+            extra_body={
+                "chat_template_kwargs": {
+                    "enable_thinking": True,
+                },
+            }
+            if settings.USE_SELFHOSTED_LLM
+            else {"thinking": {"type": "enabled"}},
         )
     return ModelSettings(
         max_tokens=max_tokens or 262144,
         temperature=temperature or 0.7,
         top_p=top_p or 0.8,
         presence_penalty=presence_penalty or 1.5,
-        extra_body={"thinking": {"type": "disabled"}},
+        extra_body={
+            "chat_template_kwargs": {
+                "enable_thinking": False,
+            },
+        }
+        if settings.USE_SELFHOSTED_LLM
+        else {"thinking": {"type": "disabled"}},
     )

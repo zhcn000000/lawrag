@@ -124,7 +124,7 @@ async def search_documents(
                 "来源": source,
                 "path": doc.node_path or "-",
                 "内容预览": preview,
-                "相关性%": f"{min(score, 1.0) * 100:.1f}",
+                "相关性%": f"{min(score, 1.0) * 100:.1f}%",
             })
 
         md = "## 搜索结果\n\n"

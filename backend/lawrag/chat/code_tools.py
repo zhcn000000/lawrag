@@ -1,13 +1,14 @@
 from typing import Annotated, Literal
 
 from pydantic import Field
-from pydantic_ai import FunctionToolset, ModelRetry, RunContext, ToolDefinition
+from pydantic_ai import ModelRetry, RunContext, ToolDefinition
+from pydantic_ai.capabilities import Capability
 from pydantic_monty import Monty
 from rich.pretty import pretty_repr
 
 from .struct import ModelDeps
 
-code_toolset: FunctionToolset[ModelDeps] = FunctionToolset()
+code_capability: Capability[ModelDeps] = Capability()
 
 
 async def prepare_code(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> ToolDefinition | None:
@@ -16,7 +17,7 @@ async def prepare_code(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> 
     return None
 
 
-@code_toolset.tool(
+@code_capability.tool(
     name="python_repl",
     description="这是一个可以执行Python代码的工具，输入Python代码并返回最后一条表达式的结果和控制台输出。"
     "为了沙盒的安全性，以及沙盒的局限性，该工具不支持任何需要使用import导入的库，除了sys, typing, asyncio",

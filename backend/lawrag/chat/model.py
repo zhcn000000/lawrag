@@ -6,11 +6,11 @@ from pydantic_ai import Agent, ModelSettings, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.deepseek import DeepSeekProvider
 
-from .code_tools import code_toolset
-from .rag_tools import rag_toolset
+from .code_tools import code_capability
+from .rag_tools import rag_capability
 from .struct import TOOL_REGISTRY, ModelDeps
-from .subagent_tools import subagent_toolset
-from .web_tools import web_toolset
+from .subagent_tools import subagent_capability
+from .web_tools import web_capability
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ agent: Agent[ModelDeps, str] = Agent(
     model=model,
     deps_type=ModelDeps,
     output_type=str,
-    toolsets=[rag_toolset, code_toolset, web_toolset, subagent_toolset],
+    capabilities=[rag_capability, code_capability, web_capability, subagent_capability],
     retries=5,
     instructions="""你是一名专业的中国法律顾问AI助手。
 请优先使用中文输出和<think>思考</think>，除非用户使用其他语言输入或明确要求使用其他语言。

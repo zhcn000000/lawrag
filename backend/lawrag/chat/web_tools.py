@@ -6,11 +6,12 @@ from bs4 import BeautifulSoup
 from exa_py import AsyncExa
 from exa_py.api import Category, SearchType
 from pydantic import Field
-from pydantic_ai import FunctionToolset, ModelRetry, RunContext, ToolDefinition
+from pydantic_ai import ModelRetry, RunContext, ToolDefinition
+from pydantic_ai.capabilities import Capability
 
 from .struct import ModelDeps
 
-web_toolset: FunctionToolset[ModelDeps] = FunctionToolset()
+web_capability: Capability[ModelDeps] = Capability()
 
 
 async def prepare_web(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> ToolDefinition | None:
@@ -24,7 +25,7 @@ def _get_exa() -> AsyncExa:
     return AsyncExa()
 
 
-@web_toolset.tool(
+@web_capability.tool(
     prepare=prepare_web,
     name="search_web",
     description="网络搜索工具，输入搜索关键词，返回搜索结果摘要。可用于补充法律法规、司法解释等背景信息。",
@@ -59,7 +60,7 @@ async def search_web(
         raise ModelRetry(f"网络搜索失败: {e!s}") from e
 
 
-@web_toolset.tool(
+@web_capability.tool(
     prepare=prepare_web,
     name="extract_web",
     description="提取网页内容工具，输入网页URL列表，返回网页的主要内容摘要。",
@@ -89,7 +90,7 @@ async def extract_web(
         raise ModelRetry(f"网页内容提取失败: {e!s}") from e
 
 
-@web_toolset.tool(
+@web_capability.tool(
     prepare=prepare_web,
     name="crawl_web",
     description="网页爬取工具，输入网页URL，递归爬取并返回网页文本内容。",
@@ -132,7 +133,7 @@ async def crawl_web(
         raise ModelRetry(f"网页爬取失败: {e!s}") from e
 
 
-@web_toolset.tool(
+@web_capability.tool(
     prepare=prepare_web,
     name="fetch_web",
     description="获取网页原始内容工具，输入网页URL，返回网页的文本内容。",

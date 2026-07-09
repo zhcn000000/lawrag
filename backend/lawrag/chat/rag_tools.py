@@ -2,14 +2,40 @@ from typing import Annotated
 
 import pandas as pd
 from pydantic import Field
-from pydantic_ai import FunctionToolset, ModelRetry, RunContext, ToolDefinition
+from pydantic_ai import ModelRetry, RunContext, ToolDefinition
+from pydantic_ai.capabilities import Capability
 
 from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragmode import RAGMode
 
 from .struct import ModelDeps
 
-rag_toolset: FunctionToolset[ModelDeps] = FunctionToolset()
+rag_capability: Capability[ModelDeps] = Capability(
+    instructions="""这是一个 RAG 工具集, 用于查询已导入的法律文档库 (法律法规、司法解释等) 的内容, 使用流程如下:
+
+1. 探查法律范围: 不确定有哪些法律时, 先调用
+   list_laws(regex?, limit, offset) 列出已导入法律的名称与法条数量, 可用 regex 过滤。
+2. 选择入口 (根据用户意图三选一):
+   - 语义检索: 关键词/语义不明确时, 用 search_documents(query, regex?, limit, offset), 返回的 `path` 列可用于后续下钻。
+   - 按条号取: 已知具体法条号或区间, 用 get_law_articles(law_name, article_number?, start?, end?, limit)。
+   - 沿结构浏览: 想了解整体框架或定位章节, 先 get_law_toc(law_name) 看编/章/节目录,
+   再 browse_law(law_name, path, limit) 逐级下钻。
+3. 取详情/继续下钻:
+   - 已知 path 想看完整内容: get_article_by_path(law_name, path)。
+   - 想看某层级的全部下级条目: browse_law(law_name, path)。
+4. 综合回答: 必要时并行调用上述工具 (例如同时 search_documents 扩大召回
+   + get_law_toc 确认结构 + browse_law 补齐上下文), 再用自然语言回答用户。
+
+注意事项:
+- `path` 是数据库物化路径, 构成方式如下
+path 的格式为各级 `<前缀><编号>` 用 / 连接, 前缀含义: b=编, sb=分编, c=章, s=节, a=条, pre=序言;
+path 的开头总是 law0/ (表示法律根节点), 后面跟各级节点, 例如 law0/b2/c2/s1 表示 第2编→第2章→第1节。
+例如 'law0/b2/c2/s1' 表示 第2编→第2章→第1节。
+path 不是中文标题，而是数据库物化路径
+你可以按照规律自己拼以查看其他的法律条款或 search_documents 等工具返回结果中的 `path` 值传入, 也可以自行构造
+- `law_name` 必须与 list_laws 或者其他工具返回的法律名称的完全一致。
+""",
+)
 
 rag_mode = RAGMode()
 page_index = LawPageIndex()
@@ -31,7 +57,7 @@ def _format_location(article: dict) -> str:
     return " / ".join(parts)
 
 
-@rag_toolset.tool(
+@rag_capability.tool(
     name="list_laws",
     description=(
         "列出所有已导入的法律及其法条数量。支持正则过滤和分页。先调用此工具了解有哪些法律可用, 再调用其他法律查询工具。"
@@ -59,7 +85,7 @@ async def list_laws(
         raise ModelRetry(f"获取法律列表失败: {e!s}") from e
 
 
-@rag_toolset.tool(
+@rag_capability.tool(
     name="search_documents",
     description="""
 根据查询语义搜索法律文档库，返回分页的文档列表。
@@ -117,11 +143,9 @@ async def search_documents(
         raise ModelRetry(f"搜索失败: {e!s}") from e
 
 
-@rag_toolset.tool(
+@rag_capability.tool(
     name="get_article_by_path",
-    description="""根据层级路径 `path` 获取该 path 本身对应的法条(或章节)信息, 返回格式同 search_documents 的单条结果。
-`path` 原样取自 search_documents / get_law_toc / browse_law 返回的 `path` 列 (如 'law0/b2/c2/s1' 或 'b2/c2/s1')。
-适用于已知某条法条的 path, 想直接查看它的完整内容与所属章节面包屑, 而无需再次搜索。""",
+    description="""根据层级路径 `path` 获取该 path 本身对应的法条(或章节)信息""",
     prepare=prepare_rag,
 )
 async def get_article_by_path(
@@ -152,7 +176,7 @@ async def get_article_by_path(
         raise ModelRetry(f"获取法条信息失败: {e!s}") from e
 
 
-@rag_toolset.tool(
+@rag_capability.tool(
     name="get_law_articles",
     description="""获取某个范围的法条内容""",
     prepare=prepare_rag,
@@ -205,7 +229,7 @@ async def get_law_articles(
         raise ModelRetry(f"法条查找失败: {e!s}") from e
 
 
-@rag_toolset.tool(
+@rag_capability.tool(
     name="get_law_toc",
     description="""获取指定法律的多级目录(编/分编/章/节标题结构)。用于了解一部法律的整体框架, 或定位某条法条所属的章节。
 目录每个节点都带有 `path` (层级路径)。要查看某编/章/节下的具体法条时, 复制对应节点的 `path` 传给 browse_law。""",
@@ -244,17 +268,11 @@ async def get_law_toc(
         raise ModelRetry(f"获取法律目录失败: {e!s}") from e
 
 
-@rag_toolset.tool(
+@rag_capability.tool(
     name="browse_law",
     description="""像浏览文件夹一样按层级路径 `path` 逐级浏览一部法律 (编/分编/章/节/条)。
-关键: `path` 不是自己拼的中文标题, 而是数据库里的物化路径, 请直接复制 get_law_toc
-或 search_documents 返回结果中的 `path` 值传入, 也可以自行构造
-path 的格式为各级 `<前缀><编号>` 用 / 连接, 前缀含义: b=编, sb=分编, c=章, s=节, a=条, pre=序言;
-path 的开头总是 law0/ (表示法律根节点), 后面跟各级节点, 例如 law0/b2/c2/s1 表示 第2编→第2章→第1节。
-例如 'b2/c2/s1' 表示 第2编→第2章→第1节。
 - 不传 path: 返回该法律最顶层的条目 (编 或 章 或 条)。
-- 传 path: 返回该节点的直接下一层级 (编→章, 章→节或条, 节→条)。
-返回列表中每行仍带 `path`, 复制它继续下钻即可。若只想按关键词/条号找法条, 请用 search_law_articles。""",
+- 传 path: 返回该节点的直接下一层级 (编→章, 章→节或条, 节→条)。""",
     prepare=prepare_rag,
 )
 async def browse_law(

@@ -23,7 +23,7 @@ import type { BubbleListRef } from "@ant-design/x/es/bubble";
 import { useXChat, useXConversations } from "@ant-design/x-sdk";
 import styled from "@emotion/styled";
 import type { MenuProps, UploadFile, UploadProps } from "antd";
-import { Alert, Checkbox, Flex, Input, Modal, message, Tooltip, Typography } from "antd";
+import { Alert, Badge, Checkbox, Flex, Input, Modal, message, Tooltip, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ChatMessage,
@@ -739,13 +739,15 @@ export default function ChatPage() {
                     disabled={isRequesting}
                   />
                 </Tooltip>
-                <Tooltip title="工具选择">
-                  <Sender.Switch
-                    icon={<ToolOutlined />}
-                    value={toolVisible}
-                    onChange={setToolVisible}
-                    disabled={isRequesting}
-                  />
+                <Tooltip title={selectedTools.length > 0 ? `工具选择（已选 ${selectedTools.length} 个）` : "工具选择"}>
+                  <Badge count={selectedTools.length} size="small" offset={[-2, 2]} color="var(--primary-color)">
+                    <Sender.Switch
+                      icon={<ToolOutlined />}
+                      value={toolVisible}
+                      onChange={setToolVisible}
+                      disabled={isRequesting}
+                    />
+                  </Badge>
                 </Tooltip>
                 <Tooltip title="深度思考">
                   <Sender.Switch icon={<BulbOutlined />} value={isDeepThinking} onChange={setIsDeepThinking} />

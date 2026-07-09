@@ -31,9 +31,10 @@ class SearchResult(TypedDict):
 
 
 @web_capability.tool(
-    prepare=prepare_web,
     name="search_web",
     description="网络搜索工具，输入搜索关键词，返回搜索结果摘要。可用于补充法律法规、司法解释等背景信息。",
+    prepare=prepare_web,
+    include_return_schema=True,
 )
 async def search_web(
     ctx: RunContext[ModelDeps],
@@ -68,9 +69,10 @@ async def search_web(
 
 
 @web_capability.tool(
-    prepare=prepare_web,
     name="fetch_web",
     description="获取网页原始内容工具，输入网页URL，返回网页的文本内容。",
+    prepare=prepare_web,
+    include_return_schema=True,
 )
 async def fetch_web(
     ctx: RunContext[ModelDeps],

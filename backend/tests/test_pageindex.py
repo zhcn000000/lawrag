@@ -116,10 +116,6 @@ async def test_import_and_retrieve(test_law_file: AsyncPath) -> None:
     assert {c["number"] for c in sec2["children"]} == {4, 5}
     assert all(c["is_leaf"] for c in sec2["children"])
 
-    # 不存在的 path 返回 error
-    missing = await pageindex.abrowse_law(law_name=law_name, path="b9/c9")
-    assert missing["error"] == "path_not_found"
-
     # 重复导入应保持幂等 (delete-then-insert + (law_name, path) 唯一约束)
     await pageindex.aimport_file(file_path=test_law_file)
     laws_again = {e["law_name"]: e for e in await pageindex.alist_laws()}

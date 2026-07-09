@@ -60,10 +60,11 @@ def agent_instructions() -> str:
 
 
 @subagent_capability.tool(
-    prepare=prepare_subagent,
     name="subagent",
     description="""调用子Agent来执行任务，子Agent可以使用不同的工具组合来完成任务。
 在agent_name中填入子Agent的名称,在task_text中填入要交给子Agent执行的任务文本。""",
+    prepare=prepare_subagent,
+    include_return_schema=True,
 )
 async def subagent(
     ctx: RunContext[ModelDeps],

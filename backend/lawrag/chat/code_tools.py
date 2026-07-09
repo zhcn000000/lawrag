@@ -5,7 +5,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, TypeAdapter
 from pydantic_ai import ModelRetry, RunContext, ToolDefinition
 from pydantic_ai.capabilities import Capability
-from pydantic_ai.messages import ToolCallPart, ToolReturn, ToolReturnContent
+from pydantic_ai.messages import ToolCallPart, ToolReturn, ToolReturnContent, is_multi_modal_content
 from pydantic_ai.tool_manager import ToolManager
 from pydantic_ai.tools import ToolDenied
 from pydantic_monty import Monty
@@ -31,6 +31,7 @@ async def prepare_code(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> 
 沙箱中可以直接调用当前可用的Agent工具作为函数，函数名和参数名称与普通工具调用完全一致。
 所有工具函数都是异步的，调用时必须使用 `await`，如 `result = await search_documents(query='关键词')`。""",
     prepare=prepare_code,
+    include_return_schema=True,
 )
 async def python_repl(
     ctx: RunContext[ModelDeps],
@@ -83,6 +84,8 @@ def _make_tool_wrapper(name: str, tool_manager: ToolManager[ModelDeps]) -> Calla
         result = await tool_manager.handle_call(call_part, wrap_validation_errors=False)
         if isinstance(result, ToolReturn):
             result = result.return_value
+            if is_multi_modal_content(result):
+                raise RuntimeError(f"工具 '{name}' 返回了 media 结果，无法在 Python REPL 中使用")
         if isinstance(result, ToolDenied):
             raise RuntimeError(f"工具 '{name}' 调用被拒绝")
         return TypeAdapter(ToolReturnContent).dump_python(result)

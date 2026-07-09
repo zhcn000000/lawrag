@@ -67,6 +67,7 @@ async def prepare_rag(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> T
         "返回 list[dict]，每个 dict 含 law_name 和 article_count。"
     ),
     prepare=prepare_rag,
+    include_return_schema=True,
 )
 async def list_laws(
     ctx: RunContext[ModelDeps],
@@ -95,6 +96,7 @@ class DocumentResult(TypedDict):
         "每条结果含 content/name/path/score/source 字段。"
     ),
     prepare=prepare_rag,
+    include_return_schema=True,
 )
 async def search_documents(
     ctx: RunContext[ModelDeps],
@@ -124,6 +126,7 @@ async def search_documents(
     description="根据层级路径 path 获取该 path 本身对应的法条(或章节)信息。"
     "返回 dict，含 law_name/path/content/node_type/number/full_path。",
     prepare=prepare_rag,
+    include_return_schema=True,
 )
 async def get_article_by_path(
     ctx: RunContext[ModelDeps],
@@ -140,6 +143,7 @@ async def get_article_by_path(
     name="get_law_articles",
     description="获取某个范围的法条内容。start=end可以返回单条法律内容",
     prepare=prepare_rag,
+    include_return_schema=True,
 )
 async def get_law_articles(
     ctx: RunContext[ModelDeps],
@@ -159,6 +163,7 @@ async def get_law_articles(
     description="获取指定法律的多级目录(编/分编/章/节标题结构)。"
     "返回嵌套 list[dict]，每节点含 node_type/number/title/path/children。",
     prepare=prepare_rag,
+    include_return_schema=True,
 )
 async def get_law_toc(
     ctx: RunContext[ModelDeps],

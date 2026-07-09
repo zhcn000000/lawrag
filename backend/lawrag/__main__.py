@@ -13,7 +13,7 @@ from rich.table import Table
 from typer import Argument, Option, Typer
 
 from lawrag.database.initdb import clean_db, init_db, reset_db
-from lawrag.database.pageindex import LawPageIndex
+from lawrag.database.pageindex import LawPageIndex, TocEntryDict
 from lawrag.database.ragmode import RAGMode
 from lawrag.documents.lawparser import has_parsed_content, parse_multi_level
 from lawrag.environments import settings
@@ -173,7 +173,7 @@ async def pageindex_toc(
     table.add_column("编号", style="cyan", width=6)
     table.add_column("标题", style="white")
 
-    def _walk(nodes: list[dict], depth: int) -> None:
+    def _walk(nodes: list[TocEntryDict], depth: int) -> None:
         for node in nodes:
             u = unit.get(node["node_type"], "")
             num = str(node["number"]) if node.get("number") is not None else "-"

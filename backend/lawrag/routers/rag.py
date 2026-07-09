@@ -2,9 +2,11 @@ import logging
 
 from anyio import Path as AsyncPath
 from fastapi import APIRouter
+from pydantic import TypeAdapter
 
 from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragmode import RAGMode
+from lawrag.routers.schema import LawInfoItem, PageIndexImportResultItem, SearchItem, TocEntryItem
 
 from .schema import (
     LawArticleDetailResponse,
@@ -34,12 +36,12 @@ async def api_search(request: SearchRequest) -> SearchResponse:
             offset=request.offset,
         )
         results = [
-            {
-                "content": d.content,
-                "source_name": d.name,
-                "page_index": d.page_index,
-                "score": d.query_score if d.query_score is not None else float("nan"),
-            }
+            SearchItem(
+                content=d.content,
+                source_name=d.name,
+                page_index=d.page_index,
+                score=d.query_score if d.query_score is not None else float("nan"),
+            )
             for d in docs
         ]
         return SearchResponse(success=True, status="搜索成功", results=results)
@@ -60,7 +62,8 @@ async def api_pageindex_import(request: PageIndexImportRequest) -> PageIndexImpo
         else:
             result = await pageindex.aimport_file(file_path=path)
             results = [result]
-        total = sum(r.get("count", 0) for r in results)
+        results = TypeAdapter(list[PageIndexImportResultItem]).validate_python(results)
+        total = sum(r.count for r in results)
         return PageIndexImportResponse(
             success=True,
             status=f"导入完成, 共 {total} 条法条",
@@ -76,7 +79,8 @@ async def api_pageindex_list_laws() -> LawListResponse:
     try:
         pageindex = LawPageIndex()
         laws = await pageindex.alist_laws()
-        return LawListResponse(success=True, status="获取法律列表成功", laws=laws)
+        laws_model = TypeAdapter(list[LawInfoItem]).validate_python(laws)
+        return LawListResponse(success=True, status="获取法律列表成功", laws=laws_model)
     except Exception as e:
         logger.exception("List laws failed")
         return LawListResponse(success=False, status=f"获取失败: {e!s}", laws=[])
@@ -114,7 +118,8 @@ async def api_pageindex_get_toc(law_name: str) -> LawTocResponse:
     try:
         pageindex = LawPageIndex()
         toc = await pageindex.aget_law_toc(law_name=law_name)
-        return LawTocResponse(success=True, status=f"获取 {law_name} 目录成功", law_name=law_name, toc=toc)
+        toc_model = TypeAdapter(list[TocEntryItem]).validate_python(toc)
+        return LawTocResponse(success=True, status=f"获取 {law_name} 目录成功", law_name=law_name, toc=toc_model)
     except Exception as e:
         logger.exception("Get law toc failed")
         return LawTocResponse(success=False, status=f"获取失败: {e!s}", law_name=law_name, toc=[])

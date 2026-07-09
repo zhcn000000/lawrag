@@ -1,14 +1,13 @@
+import json
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 from uuid import UUID
 
-import orjson
 from fastapi import APIRouter
 from pydantic import TypeAdapter
 from pydantic_ai import (
     AgentRun,
     AudioUrl,
-    BinaryContent,
     DocumentUrl,
     FilePart,
     FunctionToolCallEvent,
@@ -16,6 +15,7 @@ from pydantic_ai import (
     ImageUrl,
     ModelRequest,
     ModelResponse,
+    MultiModalContent,
     NativeToolCallPart,
     NativeToolReturnPart,
     PartDeltaEvent,
@@ -23,17 +23,20 @@ from pydantic_ai import (
     PartStartEvent,
     RetryPromptPart,
     SystemPromptPart,
+    TextContent,
     TextPart,
     TextPartDelta,
     ThinkingPart,
     ThinkingPartDelta,
     ToolCallPart,
     ToolReturnPart,
+    UploadedFile,
     UserContent,
     UserPromptPart,
     VideoUrl,
 )
 from pydantic_ai.direct import model_request
+from pydantic_ai.messages import is_multi_modal_content
 from starlette.responses import StreamingResponse
 
 from lawrag.chat.model import agent, get_model_settings
@@ -65,57 +68,61 @@ router = APIRouter()
 db = HistoryStore()
 
 
-def _resolve_user_content(
-    content: str | Sequence[UserContent] | Any | None,
-) -> tuple[str | None, list[FileItem] | None]:
-    from collections.abc import Iterable
+def _content_to_file_item(content: MultiModalContent) -> FileItem:
+    if isinstance(content, VideoUrl):
+        return FileItem(type="video", name=content._identifier or "", url=content.url)
+    if isinstance(content, AudioUrl):
+        return FileItem(type="audio", name=content._identifier or "", url=content.url)
+    if isinstance(content, ImageUrl):
+        return FileItem(type="image", name=content._identifier or "", url=content.url)
+    if isinstance(content, DocumentUrl):
+        return FileItem(type="document", name=content._identifier or "", url=content.url)
+    if isinstance(content, UploadedFile):
+        media_type = content.media_type
+        ty = "binary"
+        if media_type.startswith("audio/"):
+            ty = "audio"
+        elif media_type.startswith("video/"):
+            ty = "video"
+        elif media_type.startswith("image/"):
+            ty = "image"
+        return FileItem(type=ty, name=content._identifier or "", url=content.file_id)
+    ty = "binary"
+    if content.is_audio:
+        ty = "audio"
+    elif content.is_video:
+        ty = "video"
+    elif content.is_image:
+        ty = "image"
+    elif content.is_document:
+        ty = "document"
+    return FileItem(type=ty, name=content._identifier or "", url=content.data_uri)
 
+
+def _resolve_user_content(
+    content: str | Sequence[UserContent] | None,
+) -> tuple[str | None, list[FileItem] | None]:
     if content is None:
         return None, None
-    if not isinstance(content, Iterable):
-        content = [content]
-    text = ""
-    files = []
-    for chunk in content:
-        if isinstance(chunk, str):
-            text += chunk
-            continue
-        if isinstance(chunk, VideoUrl):
-            url = chunk.url
-            name = chunk._identifier
-            ty = "video"
-        elif isinstance(chunk, AudioUrl):
-            url = chunk.url
-            name = chunk._identifier
-            ty = "audio"
-        elif isinstance(chunk, ImageUrl):
-            url = chunk.url
-            name = chunk._identifier
-            ty = "image"
-        elif isinstance(chunk, DocumentUrl):
-            url = chunk.url
-            name = chunk._identifier
-            ty = "document"
-        elif isinstance(chunk, BinaryContent):
-            url = chunk.data_uri
-            name = chunk._identifier
-            ty = "binary"
-            if chunk.is_audio:
-                ty = "audio"
-            elif chunk.is_video:
-                ty = "video"
-            elif chunk.is_image:
-                ty = "image"
-            elif chunk.is_document:
-                ty = "document"
+    if isinstance(content, str) or is_multi_modal_content(content) or not isinstance(content, Sequence):
+        items: list[Any] = [content]
+    else:
+        items = list(content)
+
+    texts: list[str] = []
+    files: list[FileItem] = []
+    for item in items:
+        if is_multi_modal_content(item):
+            files.append(_content_to_file_item(item))
+        elif isinstance(item, str):
+            texts.append(item)
+        elif isinstance(item, TextContent):
+            texts.append(item.content)
         else:
-            if isinstance(chunk, Iterable):
-                text += "\n\n" + orjson.dumps(chunk).decode("utf-8")
-            else:
-                text += str(chunk)
-            continue
-        files.append(FileItem(type=ty, name=name or "", url=url))
-    return text.strip(), files or None
+            raise TypeError(f"Unsupported user content type: {type(item)}")
+
+    text = "\n".join(texts).strip()
+    return text or None, files or None
 
 
 # ruff: noqa: ASYNC119
@@ -174,13 +181,7 @@ async def api_chat(
                             elif isinstance(event.part, FilePart):
                                 yield AssistantMessageItem(
                                     role="assistant",
-                                    files=[
-                                        FileItem(
-                                            type="binary",
-                                            name=event.part.content._identifier or "",
-                                            url=event.part.content.data_uri,
-                                        ),
-                                    ],
+                                    files=[_content_to_file_item(event.part.content)],
                                 )
                         elif isinstance(event, PartDeltaEvent):
                             if isinstance(event.delta, ThinkingPartDelta):
@@ -219,7 +220,12 @@ async def api_chat(
                             )
                         elif isinstance(event, FunctionToolResultEvent):
                             if isinstance(event.part, ToolReturnPart | NativeToolReturnPart):
-                                content, files = _resolve_user_content(event.part.content)
+                                if is_multi_modal_content(event.part.content):
+                                    files = [_content_to_file_item(event.part.content)]
+                                    content = None
+                                else:
+                                    files = None
+                                    content = json.dumps(event.part.content, ensure_ascii=False, indent=2)
                                 yield ToolMessageItem(
                                     role="tool",
                                     tool_call_id=event.part.tool_call_id,
@@ -231,7 +237,7 @@ async def api_chat(
                             elif isinstance(event.part, RetryPromptPart):
                                 content = event.part.content
                                 if not isinstance(content, str):
-                                    content = orjson.dumps(content).decode("utf-8")
+                                    content = json.dumps(content, ensure_ascii=False, indent=2)
                                 yield ToolMessageItem(
                                     role="tool",
                                     tool_call_id=event.part.tool_call_id,
@@ -282,7 +288,12 @@ async def api_history(
                         ),
                     )
                 elif isinstance(part, ToolReturnPart | NativeToolReturnPart):
-                    content, files = _resolve_user_content(part.content)
+                    if is_multi_modal_content(part.content):
+                        files = [_content_to_file_item(part.content)]
+                        content = None
+                    else:
+                        files = None
+                        content = json.dumps(part.content, ensure_ascii=False, indent=2)
                     history_lists.append(
                         ToolMessageItem(
                             role="tool",
@@ -301,7 +312,7 @@ async def api_history(
                             name=part.tool_name or "tool",
                             content=part.content
                             if isinstance(part.content, str)
-                            else orjson.dumps(part.content).decode("utf-8"),
+                            else json.dumps(part.content, ensure_ascii=False, indent=2),
                             success=False,
                         ),
                     )
@@ -321,13 +332,7 @@ async def api_history(
                 elif isinstance(part, FilePart):
                     if aimsg.files is None:
                         aimsg.files = []
-                    aimsg.files.append(
-                        FileItem(
-                            type="binary",
-                            name=part.content._identifier or "",
-                            url=part.content.data_uri,
-                        ),
-                    )
+                    aimsg.files.append(_content_to_file_item(part.content))
             aimsg.success = True
             history_lists.append(aimsg)
     return HistoryResponse(success=True, status="获取历史记录成功", messages=history_lists)

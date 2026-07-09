@@ -42,8 +42,15 @@ class SearchRequest(BaseModel):
     k: int = 4
 
 
+class SearchItem(BaseModel):
+    content: str
+    source_name: str | None = None
+    page_index: str | None = None
+    score: float | None = None
+
+
 class SearchResponse(StatusResponse):
-    results: list[dict[str, Any]]
+    results: list[SearchItem]
 
 
 class DocumentUploadResponse(StatusResponse):
@@ -146,8 +153,14 @@ class PageIndexImportRequest(BaseModel):
     path: str
 
 
+class PageIndexImportResultItem(BaseModel):
+    file: str
+    status: str
+    count: int = 0
+
+
 class PageIndexImportResponse(StatusResponse):
-    results: list[dict[str, Any]]
+    results: list[PageIndexImportResultItem]
 
 
 class LawArticleResponse(BaseModel):
@@ -169,10 +182,23 @@ class LawArticleDetailResponse(StatusResponse):
     article: LawArticleResponse | None = None
 
 
+class LawInfoItem(BaseModel):
+    law_name: str
+    article_count: int
+
+
+class TocEntryItem(BaseModel):
+    node_type: str
+    number: int | None
+    title: str | None
+    path: str
+    children: list[TocEntryItem] | None = None
+
+
 class LawListResponse(StatusResponse):
-    laws: list[dict[str, Any]]
+    laws: list[LawInfoItem]
 
 
 class LawTocResponse(StatusResponse):
     law_name: str
-    toc: list[dict[str, Any]]
+    toc: list[TocEntryItem]

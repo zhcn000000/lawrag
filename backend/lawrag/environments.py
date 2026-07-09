@@ -71,7 +71,7 @@ class EnvironmentSettings(BaseSettings):  # pyright: ignore
             scheme=self.LLM_PROTOCOL,
             host=self.LLM_HOST,
             port=self.LLM_PORT,
-            path="/v1",
+            path="v1",
         )
 
 

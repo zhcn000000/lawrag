@@ -13,7 +13,42 @@ export const getAuthHeaders = (): Record<string, string> => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-export type ToolType = "sql_toolkit" | "rag_toolkit" | "code_toolkit" | "web_toolkit";
+export type ToolType = "rag_toolkit" | "code_toolkit" | "web_toolkit" | "subagent_toolkit";
+
+export type ToolInfo = {
+  label: string;
+  description: string;
+  default_enabled: boolean;
+  requires: string[];
+};
+
+export type SubagentInfo = {
+  label: string;
+  description: string;
+  instructions: string;
+  toolkits: string[];
+};
+
+export type ToolsListResponse = {
+  success: boolean;
+  status?: string;
+  tools: Record<string, ToolInfo>;
+  subagents: Record<string, SubagentInfo>;
+};
+
+export const getToolList = async (): Promise<ToolsListResponse> => {
+  const response = await fetch("/api/chat/tools", {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      ...getAuthHeaders(),
+    },
+  });
+  if (!response.ok) {
+    throw new Error("获取工具列表失败");
+  }
+  return (await response.json()) as ToolsListResponse;
+};
 
 export type ToolItem = {
   part: "tool";

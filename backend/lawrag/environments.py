@@ -24,7 +24,6 @@ def find_project_directory() -> Path:
     return current_dir
 
 
-os.chdir(find_project_directory())
 env_file = find_project_directory() / ".env"
 if not env_file.exists():
     env_file = None

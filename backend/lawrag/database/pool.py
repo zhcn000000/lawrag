@@ -17,7 +17,7 @@ from psycopg_pool import AsyncConnectionPool, ConnectionPool
 from sqlalchemy import URL, Engine, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from lawrag.utils.environments import settings
+from lawrag.environments import settings
 
 from .types import BM25Dumper, BM25Loader
 

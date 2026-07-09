@@ -16,9 +16,9 @@ from lawrag.database.initdb import clean_db, init_db, reset_db
 from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragmode import RAGMode
 from lawrag.documents.lawparser import has_parsed_content, parse_multi_level
+from lawrag.environments import settings
 from lawrag.routers import app
 from lawrag.spider.runner import run_content_download, run_law_index_spider
-from lawrag.utils.environments import settings
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ cmd = Typer(pretty_exceptions_enable=False)
 database_cmd = Typer(pretty_exceptions_enable=False, help="数据库操作命令")
 pageindex_cmd = Typer(pretty_exceptions_enable=False, help="法条索引命令")
 spider_cmd = Typer(pretty_exceptions_enable=False, help="法律爬虫命令")
+eval_cmd = Typer(pretty_exceptions_enable=False, help="模型评估命令")
 
 
 @cmd.command()
@@ -314,9 +315,55 @@ async def spider_download(
     logger.info("Download+parse completed: %d OK, %d failed", ok, failed)
 
 
+@eval_cmd.command("run")
+@runnify
+async def eval_run(
+    max_cases: Annotated[int | None, Option("--max-cases", "-n", help="最多评估的样本数, 默认全部")] = None,
+    output: Annotated[Path | None, Option("--output", "-o", help="评估报告 JSON 输出路径")] = None,
+) -> None:
+    """运行法律问答测试集, 用 LLM 裁判评估 Agent 输出并生成报告。
+
+    读取 ``lawrag.eval.dataset.cases`` 中的问答样本, 逐条调用 Agent 生成回答,
+    与标准答案对比后由 LLM 裁判判定是否通过, 结果以 rich 表格展示并写入 JSON。
+    """
+    from lawrag.eval import LawRagCaseReport, evaluate
+
+    if output is None:
+        output = settings.DATA_ROOT / "eval" / "report.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    logger.info("开始评估 (最多 %s 条样本)...", max_cases if max_cases is not None else "全部")
+    reports = await evaluate(max_cases=max_cases)
+
+    passed = sum(1 for r in reports if r.success)
+    total = len(reports)
+    table = Table(title=f"法律问答评估结果 (通过 {passed}/{total})", title_style="bold")
+    table.add_column("结果", width=6)
+    table.add_column("问题", style="green", width=40)
+    table.add_column("评价", style="white")
+    for r in reports:
+        mark = "[green]PASS[/green]" if r.success else "[red]FAIL[/red]"
+        question = r.question.strip().replace("\n", " ")
+        question = question[:38] + ("..." if len(question) > 38 else "")
+        note = r.evaluation_note if isinstance(r, LawRagCaseReport) else r.error_message
+        note = note.strip().replace("\n", " ")
+        note = note[:80] + ("..." if len(note) > 80 else "")
+        table.add_row(mark, question, note)
+    rprint(table)
+
+    output.write_text(
+        json.dumps([r.model_dump() for r in reports], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    rate = passed / total if total else 0.0
+    rprint(f"通过率: {rate:.1%} ({passed}/{total})")
+    rprint(f"报告已写入: {output}")
+
+
 cmd.add_typer(spider_cmd, name="spider")
 cmd.add_typer(pageindex_cmd, name="pageindex")
 cmd.add_typer(database_cmd, name="database")
+cmd.add_typer(eval_cmd, name="eval")
 
 
 def main():

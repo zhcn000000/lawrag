@@ -4,7 +4,6 @@ import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 
 export default defineConfig(({ mode }) => {
-  // 读取项目根目录的 .env 文件（与 backend/knowgraph/utils/environments.py 保持一致）
   const envDir = path.resolve(__dirname, "..");
   const env = loadEnv(mode, envDir, "");
 

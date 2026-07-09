@@ -10,7 +10,7 @@ from sqlalchemy.schema import CreateSchema, CreateTable, DropSchema, DropTable
 from sqlalchemy_utils.functions.database import create_database, database_exists, drop_database
 from sqlmodel import SQLModel
 
-from lawrag.utils.environments import settings
+from lawrag.environments import settings
 
 from .pool import pool_manager
 

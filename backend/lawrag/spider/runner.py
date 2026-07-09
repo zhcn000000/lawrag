@@ -10,9 +10,9 @@ from typing import Any
 
 from scrapy.crawler import AsyncCrawlerRunner
 
+from lawrag.environments import settings as env_settings
 from lawrag.spider.content_spider import ContentDownloadSpider
 from lawrag.spider.law_spider import LawIndexSpider
-from lawrag.utils.environments import settings as env_settings
 
 logger = logging.getLogger(__name__)
 

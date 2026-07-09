@@ -9,8 +9,8 @@ from asyncer import asyncify
 from markitdown import MarkItDown
 
 from lawrag.documents.lawparser import has_parsed_content, parse_multi_level
+from lawrag.environments import settings as env_settings
 from lawrag.spider.items import LawDownloadItem, LawIndexItem
-from lawrag.utils.environments import settings as env_settings
 
 logger = logging.getLogger(__name__)
 

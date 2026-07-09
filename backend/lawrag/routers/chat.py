@@ -16,7 +16,6 @@ from pydantic_ai import (
     ImageUrl,
     ModelRequest,
     ModelResponse,
-    ModelSettings,
     NativeToolCallPart,
     NativeToolReturnPart,
     PartDeltaEvent,
@@ -37,8 +36,8 @@ from pydantic_ai import (
 from pydantic_ai.direct import model_request
 from starlette.responses import StreamingResponse
 
-from lawrag.chat.model import agent
-from lawrag.chat.struct import ModelDeps
+from lawrag.chat.model import agent, get_model_settings
+from lawrag.chat.struct import SUBAGENT_REGISTRY, TOOL_REGISTRY, ModelDeps
 from lawrag.database.history import HistoryStore
 
 from .schema import (
@@ -57,6 +56,7 @@ from .schema import (
     SystemMessageItem,
     ToolItem,
     ToolMessageItem,
+    ToolsListResponse,
     UserMessageItem,
 )
 
@@ -83,38 +83,38 @@ def _resolve_user_content(
         if isinstance(chunk, VideoUrl):
             url = chunk.url
             name = chunk._identifier
-            typ = "video"
+            ty = "video"
         elif isinstance(chunk, AudioUrl):
             url = chunk.url
             name = chunk._identifier
-            typ = "audio"
+            ty = "audio"
         elif isinstance(chunk, ImageUrl):
             url = chunk.url
             name = chunk._identifier
-            typ = "image"
+            ty = "image"
         elif isinstance(chunk, DocumentUrl):
             url = chunk.url
             name = chunk._identifier
-            typ = "document"
+            ty = "document"
         elif isinstance(chunk, BinaryContent):
             url = chunk.data_uri
             name = chunk._identifier
-            typ = "binary"
+            ty = "binary"
             if chunk.is_audio:
-                typ = "audio"
+                ty = "audio"
             elif chunk.is_video:
-                typ = "video"
+                ty = "video"
             elif chunk.is_image:
-                typ = "image"
+                ty = "image"
             elif chunk.is_document:
-                typ = "document"
+                ty = "document"
         else:
             if isinstance(chunk, Iterable):
                 text += "\n\n" + orjson.dumps(chunk).decode("utf-8")
             else:
                 text += str(chunk)
             continue
-        files.append(FileItem(type=typ, name=name or "", url=url))
+        files.append(FileItem(type=ty, name=name or "", url=url))
     return text.strip(), files or None
 
 
@@ -125,15 +125,11 @@ async def api_chat(
     request: ChatRequest,
 ) -> StreamingResponse:
     message_history = await db.aget_messages(session_id)
-    deps = ModelDeps(select_toolset=request.select_toolset)
+    deps = ModelDeps(select_toolset=request.tools)
     files: list[Any] = []
     messages: Sequence[UserContent] = [request.text] + files
-    model_settings = ModelSettings(
-        max_tokens=131072,
-        temperature=1.0 if request.thinking else 0.7,
-        top_p=0.95 if request.thinking else 0.8,
-        presence_penalty=1.5,
-        extra_body={"thinking": {"type": "enabled"}},
+    model_settings = get_model_settings(
+        thinking=request.thinking,
     )
 
     async def event_stream_handler(
@@ -352,14 +348,10 @@ async def api_generate_session_title(
                 "10个字左右，最多不超过20字，不要输出与标题无关的内容，注意不是回答用户问题，而是生成会话标题方便用户寻找",
             ),
         ],
-        model_settings=ModelSettings(
-            max_tokens=32,
-            temperature=0.01,
-            extra_body={
-                "chat_template_kwargs": {
-                    "enable_thinking": False,
-                },
-            },
+        model_settings=get_model_settings(
+            thinking=False,
+            max_tokens=20,
+            temperature=0.0,
         ),
     )
     title = response.text
@@ -398,3 +390,8 @@ async def api_session_list() -> SessionListResponse:
     sessions = await db.alist_sessions()
     sessions = TypeAdapter(list[SessionItem]).validate_python(sessions, extra="ignore")
     return SessionListResponse(success=True, status="获取会话列表成功", sessions=sessions)
+
+
+@router.get("/tools")
+async def api_list_tools() -> ToolsListResponse:
+    return ToolsListResponse(success=True, status="获取工具列表成功", tools=TOOL_REGISTRY, subagents=SUBAGENT_REGISTRY)

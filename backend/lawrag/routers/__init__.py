@@ -6,8 +6,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 
 from lawrag.database.user import TokenDataDict, UserManager
+from lawrag.environments import find_project_directory
 from lawrag.routers.user import CurrentUserDep
-from lawrag.utils.environments import find_project_directory
 
 from .chat import router as chat_router
 from .rag import router as rag_router

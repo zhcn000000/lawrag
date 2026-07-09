@@ -1,7 +1,7 @@
 import json
 import logging
 from itertools import starmap
-from pathlib import Path
+from os import PathLike
 from uuid import UUID, uuid7
 
 from anyio import Path as AsyncPath
@@ -81,7 +81,7 @@ class LawPageIndex:
 
     async def aimport_file(
         self,
-        file_path: str | Path | AsyncPath,
+        file_path: str | PathLike,
     ) -> dict:
         path = AsyncPath(file_path)
         law_name = path.stem
@@ -145,7 +145,7 @@ class LawPageIndex:
 
     async def aimport_from_dir(
         self,
-        dir_path: str | Path | AsyncPath,
+        dir_path: str | PathLike,
     ) -> list[dict]:
         path = AsyncPath(dir_path)
         if not await path.is_dir():

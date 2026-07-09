@@ -34,7 +34,7 @@ import type {
   ToolItem,
   ToolType,
 } from "@/api/chat";
-import { createChatProvider, generateSessionTitle, getHistoryMessages, transcribeAudio } from "@/api/chat";
+import { createChatProvider, generateSessionTitle, getHistoryMessages, getToolList, transcribeAudio } from "@/api/chat";
 import { createSession, deleteSession, getSessionList, renameSession } from "@/api/session";
 import { SuperMarkdown } from "@/components/SuperMarkdown";
 
@@ -45,11 +45,16 @@ const defaultTypingConfig = {
   keepPrefix: true,
 };
 
-const availableTools: { value: ToolType; label: string; description: string }[] = [
-  { value: "rag_toolkit", label: "法律知识库检索", description: "用于检索法律文档的增强检索工具" },
-  { value: "code_toolkit", label: "在容器中执行代码", description: "用于安全的执行代码以计算的工具" },
-  { value: "web_toolkit", label: "搜索网页", description: "用于实时获取互联网法律法规信息的工具" },
-];
+type AvailableTool = {
+  value: ToolType;
+  label: string;
+  description: string;
+  default_enabled: boolean;
+  requires: ToolType[];
+};
+
+const AUTO_TITLE_PREFIX = "新会话-";
+const isAutoTitleName = (name: string): boolean => name.startsWith(AUTO_TITLE_PREFIX);
 
 type ConversationItem = {
   key: string;
@@ -83,6 +88,7 @@ const resolveFileType = (url?: string): "image" | "audio" | "video" | "file" => 
 export default function ChatPage() {
   const [attachments, setAttachments] = useState<UploadFile[]>([]);
   const [senderValue, setSenderValue] = useState("");
+  const [availableTools, setAvailableTools] = useState<AvailableTool[]>([]);
   const [selectedTools, setSelectedTools] = useState<ToolType[]>([]);
   const [toolVisible, setToolVisible] = useState(false);
   const [attachmentVisible, setAttachmentVisible] = useState(false);
@@ -140,8 +146,27 @@ export default function ChatPage() {
     messagesRef.current = messageInfos;
   }, [messageInfos]);
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await getToolList();
+        const tools: AvailableTool[] = Object.entries(response.tools ?? {}).map(([value, info]) => ({
+          value: value as ToolType,
+          label: info.label,
+          description: info.description,
+          default_enabled: info.default_enabled ?? false,
+          requires: (info.requires ?? []) as ToolType[],
+        }));
+        setAvailableTools(tools);
+        setSelectedTools(tools.filter((tool) => tool.default_enabled).map((tool) => tool.value));
+      } catch {
+        message.error("获取工具列表失败");
+      }
+    })();
+  }, []);
+
   const createNewConversation = useCallback(async () => {
-    const defaultName = `新会话-${Date.now().toString().slice(-4)}`;
+    const defaultName = `${AUTO_TITLE_PREFIX}${Date.now().toString().slice(-4)}`;
     try {
       const res = await createSession({ name: defaultName });
       if (!res?.session_id) throw new Error("创建会话失败");
@@ -161,7 +186,7 @@ export default function ChatPage() {
       const list: ConversationItem[] = sessions.map((session) => ({
         key: session.session_id,
         label: session.name,
-        isAutoTitle: false,
+        isAutoTitle: isAutoTitleName(session.name),
       }));
       setConversations(list);
       if (list.length === 0) {
@@ -179,6 +204,20 @@ export default function ChatPage() {
   useEffect(() => {
     void refreshSessionList();
   }, [refreshSessionList]);
+
+  const handleToolsChange = useCallback(
+    (values: ToolType[]) => {
+      const next = new Set(values);
+      for (const value of values) {
+        const tool = availableTools.find((item) => item.value === value);
+        for (const require of tool?.requires ?? []) {
+          next.add(require);
+        }
+      }
+      setSelectedTools(Array.from(next));
+    },
+    [availableTools],
+  );
 
   const updateConversationTitleFromMessage = useCallback(
     async (messageText: string) => {
@@ -649,7 +688,8 @@ export default function ChatPage() {
                   <ToolSelector>
                     <Checkbox
                       indeterminate={selectedTools.length > 0 && selectedTools.length < availableTools.length}
-                      checked={selectedTools.length === availableTools.length}
+                      checked={availableTools.length > 0 && selectedTools.length === availableTools.length}
+                      disabled={isRequesting || availableTools.length === 0}
                       onChange={(e) => {
                         if (e.target.checked) setSelectedTools(availableTools.map((t) => t.value));
                         else setSelectedTools([]);
@@ -658,16 +698,31 @@ export default function ChatPage() {
                     >
                       全选/全不选
                     </Checkbox>
-                    <Checkbox.Group value={selectedTools} onChange={(values) => setSelectedTools(values as ToolType[])}>
+                    <Checkbox.Group
+                      value={selectedTools}
+                      onChange={(values) => handleToolsChange(values as ToolType[])}
+                    >
                       <Flex wrap="wrap" gap="8px" style={{ width: "100%" }}>
-                        {availableTools.map((tool) => (
-                          <ToolOptionRow key={tool.value}>
-                            <Checkbox value={tool.value} disabled={isRequesting}>
-                              <ToolLabel>{tool.label}</ToolLabel>
-                              <ToolDesc>{tool.description}</ToolDesc>
-                            </Checkbox>
-                          </ToolOptionRow>
-                        ))}
+                        {availableTools.map((tool) => {
+                          const lockedBy = availableTools.filter(
+                            (item) =>
+                              item.value !== tool.value &&
+                              selectedTools.includes(item.value) &&
+                              item.requires.includes(tool.value),
+                          );
+                          const isLocked = lockedBy.length > 0;
+                          return (
+                            <ToolOptionRow key={tool.value}>
+                              <Checkbox value={tool.value} disabled={isRequesting || isLocked}>
+                                <ToolLabel>{tool.label}</ToolLabel>
+                                <ToolDesc>
+                                  {tool.description}
+                                  {isLocked ? `（由 ${lockedBy.map((item) => item.label).join("、")} 依赖）` : ""}
+                                </ToolDesc>
+                              </Checkbox>
+                            </ToolOptionRow>
+                          );
+                        })}
                       </Flex>
                     </Checkbox.Group>
                   </ToolSelector>

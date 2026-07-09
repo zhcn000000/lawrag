@@ -9,7 +9,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import col
 
-from lawrag.utils.environments import settings
+from lawrag.environments import settings
 
 from .database import DatabaseManager
 from .tables import User

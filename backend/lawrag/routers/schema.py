@@ -1,7 +1,9 @@
-from typing import Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from lawrag.chat.struct import SubagentInfo, ToolInfo
 
 
 class StatusResponse(BaseModel):
@@ -93,10 +95,18 @@ class AssistantMessageItem(BaseModel):
 
 class ChatRequest(BaseModel):
     text: str
-    files: list[str | dict] = []
+    files: Annotated[list[FileItem], Field(default_factory=list)]
     model: str | None = None
     thinking: bool = True
-    select_toolset: set[str] = {"rag_toolkit", "code_toolkit", "web_toolkit"}
+    tools: Annotated[
+        set[Literal["rag_toolkit", "code_toolkit", "web_toolkit", "subagent_toolkit"]],
+        Field(default_factory=set),
+    ]
+
+
+class ToolsListResponse(StatusResponse):
+    tools: dict[str, ToolInfo]
+    subagents: dict[str, SubagentInfo]
 
 
 class ChatTitleRequest(BaseModel):

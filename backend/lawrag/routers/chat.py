@@ -4,6 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import TypeAdapter
 from pydantic_ai import (
     AgentRun,
@@ -37,7 +38,6 @@ from pydantic_ai import (
 )
 from pydantic_ai.direct import model_request
 from pydantic_ai.messages import is_multi_modal_content
-from starlette.responses import StreamingResponse
 
 from lawrag.chat.model import agent, get_model_settings
 from lawrag.chat.struct import SUBAGENT_REGISTRY, TOOL_REGISTRY, ModelDeps

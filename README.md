@@ -86,7 +86,7 @@ lawrag/
 ### 前置条件
 
 - Python **3.14 (< 3.15)**, 推荐 [uv](https://docs.astral.sh/uv/) 管理依赖
-- Node ≥ 22, [pnpm](https://pnpm.io/) 管理前端依赖
+- Node ≥ 24 [pnpm](https://pnpm.io/) 管理前端依赖
 - 可达的 PostgreSQL 18 (带 `pgcrypto` / `vchord` / `vchord_bm25` 扩展)
 - 可达的 OpenAI 兼容 vLLM 端点：`USE_SELFHOSTED_LLM=true` 时需 `.env` 中 `LLM_*` (chat / embedding / rerank 都要走它)；若不自托管，可保留 `DEEPSEEK_API_KEY` 作为回退 (留空则 Agent 不可用, 仅 BM25 检索可用)
 

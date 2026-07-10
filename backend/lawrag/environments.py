@@ -37,7 +37,6 @@ class EnvironmentSettings(BaseSettings):  # pyright: ignore
     LLM_PROTOCOL: Literal["http", "https"] = "http"
     LLM_HOST: str = "127.0.0.1"
     LLM_PORT: int = 40002
-    USE_SELFHOSTED_LLM: bool = False
     DATA_ROOT: Annotated[Path, Field(alias="LAWRAG_DATA_ROOT")] = find_project_directory() / "data"
     UUID_SEED: Annotated[UUID, Field(alias="LAWRAG_UUID_SEED")] = UUID("11fa063e-b366-41a9-ac97-439b0a561846")
     RELEASE_MODE: Annotated[bool, Field(alias="RAG_RELEASE_MODE")] = True

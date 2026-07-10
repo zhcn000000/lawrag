@@ -1,12 +1,7 @@
 import logging
-import os
 from datetime import UTC, datetime
 
 from pydantic_ai import Agent, ModelSettings, RunContext
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.deepseek import DeepSeekProvider
-
-from lawrag.environments import settings
 
 from .chat_model import get_model
 from .code_tools import code_capability
@@ -17,13 +12,7 @@ from .web_tools import web_capability
 
 logger = logging.getLogger(__name__)
 
-if settings.USE_SELFHOSTED_LLM:
-    model = get_model()
-elif os.environ.get("DEEPSEEK_API_KEY"):
-    model = OpenAIChatModel(model_name="deepseek-v4-flash", provider=DeepSeekProvider())
-else:
-    model = None
-    logger.warning("DEEPSEEK_API_KEY not found in environment variables. The agent will not function without a model.")
+model = get_model()
 
 agent: Agent[ModelDeps, str] = Agent(
     model=model,
@@ -82,9 +71,7 @@ def get_model_settings(
                 "chat_template_kwargs": {
                     "enable_thinking": True,
                 },
-            }
-            if settings.USE_SELFHOSTED_LLM
-            else {"thinking": {"type": "enabled"}},
+            },
         )
     return ModelSettings(
         max_tokens=max_tokens or 131072,
@@ -95,7 +82,5 @@ def get_model_settings(
             "chat_template_kwargs": {
                 "enable_thinking": False,
             },
-        }
-        if settings.USE_SELFHOSTED_LLM
-        else {"thinking": {"type": "disabled"}},
+        },
     )

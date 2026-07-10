@@ -1,6 +1,7 @@
 import re
 from collections.abc import Callable
 from typing import Annotated, Any, Literal
+from uuid import uuid7
 
 from pydantic import Field, TypeAdapter
 from pydantic_ai import ModelRetry, RunContext, ToolDefinition
@@ -91,7 +92,7 @@ def _make_tool_wrapper(name: str, tool_manager: ToolManager[ModelDeps]) -> Calla
     """创建一个 async wrapper，使 pydantic-ai 工具可作为 Monty external function 使用。"""
 
     async def wrapper(**kwargs: Any) -> Any:
-        call_part = ToolCallPart(tool_name=name, args=kwargs, tool_call_id=f"repl_{name}")
+        call_part = ToolCallPart(tool_name=name, args=kwargs, tool_call_id=f"repl_{name}_{uuid7()}")
         result = await tool_manager.handle_call(call_part, wrap_validation_errors=False)
         if isinstance(result, ToolReturn):
             result = result.return_value

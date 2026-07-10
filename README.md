@@ -71,7 +71,7 @@ lawrag/
 
 | 模块 | 选型 |
 | --- | --- |
-| 本地 LLM | 仓库内 `llmserver/` 提供自托管 OpenAI 兼容 vLLM 后端 (`qwen3.5`)，`backend/lawrag/chat/chat_model.py` 通过 `LLM_LINK` 调用；不再回退到 DSAPI/DeepSeek |
+| 本地 LLM | 仓库内 `llmserver/` 提供自托管 OpenAI 兼容 vLLM 后端 (`qwen3.5`)，`backend/lawrag/chat/chat_model.py` 通过 `LLM_LINK` 调用 |
 | 模型后端 | `llmserver` (FastAPI + vLLM 0.24)，按 `llmserver/model_launch.json` 同时加载 `qwen3.5`、`qwen3-embedding`、`qwen3-reranker`，暴露 `/v1/chat/completions`、`/v1/embeddings`、`/v1/rerank` |
 | 文档爬取 | Python `scrapy` (`AsyncCrawlerRunner`) + 可选 `selenium` |
 | 文本切分 | `spaCy` + `zh_core_web_trf` 句切分 + token overlap |

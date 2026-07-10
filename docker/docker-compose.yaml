@@ -16,6 +16,22 @@ services:
       - "40002:5432"
     networks:
       - app-network
+  llmserver:
+    image: localhost/lawrag-llmserver:latest
+    build:
+      context: ..
+      dockerfile: ./docker/llmserver/Dockerfile
+    volumes:
+      - llmserver-volume:/app/data
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      LLM_HOST: "0.0.0.0"
+      LLM_PORT: 8080
+    ports:
+      - "40003:8080"
+    networks:
+      - app-network
   web:
     image: localhost/lawrag:latest
     build:
@@ -33,6 +49,8 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_PORT: 5432
       POSTGRES_HOST: database
+      LLM_HOST: llmserver
+      LLM_PORT: 8080
       FASTAPI_HOST: "0.0.0.0"
       FASTAPI_PORT: 8080
       RELEASE_MODE: 1
@@ -42,6 +60,8 @@ services:
       - app-network
 volumes:
   db-volume:
+    driver: local
+  llmserver-volume:
     driver: local
   web-volume:
     driver: local

@@ -19,7 +19,7 @@ dependencies = [
   "asyncer>=0.0.10",
   "rich>=15.0.0",
   "typer>=0.21.1",
-  "sqlalchemy>=2.0.44",
+  "sqlalchemy[asyncio]>=2.0.51",
   "sqlmodel>=0.0.32",
   "sqlalchemy-utils>=0.42.0",
   "psycopg[binary,pool]>=3.3",
@@ -62,7 +62,6 @@ dev = [
 ]
 
 [tool.uv]
-index-url = "https://mirrors.ustc.edu.cn/pypi/simple"
 
 [tool.uv.build-backend]
 module-name = "lawrag"

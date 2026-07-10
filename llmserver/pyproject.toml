@@ -50,7 +50,6 @@ dev = [
 ]
 
 [tool.uv]
-index-url = "https://mirrors.ustc.edu.cn/pypi/simple"
 required-environments = [
   "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]

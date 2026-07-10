@@ -1,2 +1,5 @@
 [environment]
 python = "backend/.venv/bin/python"
+
+[src]
+include = ["./backend/lawrag/", "./backend/tests/"]

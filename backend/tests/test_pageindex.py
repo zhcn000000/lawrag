@@ -95,7 +95,7 @@ async def test_import_and_retrieve(test_law_file: AsyncPath) -> None:
     assert [s["title"] for s in rights_part["children"][0]["children"]] == ["权利", "原则"]
 
     # Browse law like folders by path: 顶层为编
-    top = await pageindex.abrowse_law(law_name=law_name)
+    top = await pageindex.abrowse_law(law_name=law_name, path="law0/")
     assert top["node_type"] == "law"
     assert [c["node_type"] for c in top["children"]] == ["part", "part"]
     part2_path = top["children"][1]["path"]

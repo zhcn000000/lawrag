@@ -1,0 +1,174 @@
+[project]
+name = "llmserver"
+version = "0.2.0"
+description = "vLLM-based multi-model inference server"
+authors = [{ name = "bash000000", email = "m2588953@outlook.com" }]
+requires-python = ">=3.14,<3.15"
+readme = "README.md"
+dependencies = [
+  "torch==2.11.0+cu130",
+  "torchvision==0.26.0+cu130",
+  "fastapi[standard]>=0.119.1",
+  "uvicorn[standard]>=0.32.0",
+  "pydantic>=2.12.3",
+  "pydantic-settings>=2.11.0",
+  "requests>=2.32.0",
+  "markitdown[all]>=0.1.2",
+  "orjson>=3.11.4",
+  "anyio>=4.11.0",
+  "asyncer>=0.0.10",
+  "rich",
+  "typer>=0.21.1",
+  "cupy-cuda13x>=13.6.0",
+  "vllm[runai,fastsafetensors,tensorizer]==0.24.0",
+  "vllm-omni==0.24.0",
+  "flashinfer-python==0.6.12",
+  "flashinfer-cubin==0.6.12",
+  "flashinfer-jit-cache==0.6.12+cu130",
+  "pillow>=11.3.0",
+  "torch-c-dlpack-ext>=0.1.3",
+  "nixl[cu13]>=0.8.0",
+  "onnxruntime-gpu>=1.24.1",
+]
+
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[project.scripts]
+llmserver = "llmserver.__main__:main"
+
+[dependency-groups]
+dev = [
+  "ruff>=0.14.3",
+  "ty>=0.0.12",
+  "pytest>=8.4.2",
+  "pytest-asyncio>=1.2.0",
+  "prek",
+  "ipython>=9.8.0",
+  "just-bin>=1.46.0",
+]
+
+[tool.uv]
+index-url = "https://mirrors.ustc.edu.cn/pypi/simple"
+required-environments = [
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+override-dependencies = ["cuda-toolkit==13.0.2"]
+exclude-dependencies = [
+  "cupy-cuda12x",
+  "opencv-python",
+  "nixl-cu12",
+  "onnxruntime",
+]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://mirrors.ustc.edu.cn/pypi/simple"
+default = true
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130"
+explicit = true
+
+[[tool.uv.index]]
+name = "flashinfer"
+url = "https://flashinfer.ai/whl/cu130/"
+explicit = true
+
+[[tool.uv.index]]
+name = "onnxruntime"
+url = "https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/ort-cuda-13-nightly/pypi/simple/"
+explicit = true
+
+[tool.uv.build-backend]
+module-root = ""
+module_name = "llmserver"
+
+
+[tool.uv.sources]
+flashinfer-jit-cache = { index = "flashinfer" }
+torch = { index = "pytorch" }
+torchvision = { index = "pytorch" }
+onnxruntime-gpu = { index = "onnxruntime" }
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+target-version = "py314"
+fix = true
+
+[tool.ruff.analyze]
+preview = true
+
+[tool.ruff.lint]
+preview = true
+select = [
+  "F",
+  "E",
+  "W",
+  "I",
+  "N",
+  "FAST",
+  "PL",
+  "UP",
+  "NPY",
+  "PD",
+  "ASYNC",
+  "B",
+  "C4",
+  "FURB",
+  "PTH",
+]
+ignore = [
+  "PLR0904",
+  "PLR0911",
+  "PLR0912",
+  "PLR0913",
+  "PLR0914",
+  "PLR0915",
+  "PLR0916",
+  "PLR0917",
+  "PLC0415",
+  "PLW0603",
+  "PLW1641",
+  "N801",
+  "PLR2004",
+  "PLW2901",
+  "PLR1702",
+  "PLR6301",
+  "PLW3201",
+  "PLC1901",
+]
+fixable = ["ALL"]
+
+
+[tool.ruff.format]
+preview = true
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+
+[tool.ty.environment]
+root = ["./"]
+python = "./.venv/bin/python"
+python-platform = "linux"
+python-version = "3.14"
+
+[tool.ty.src]
+include = ["./llmserver"]
+
+[tool.ty.rules]
+division-by-zero = "error"
+possibly-unresolved-reference = "warn"
+possibly-missing-import = "warn"
+unsupported-dynamic-base = "warn"
+
+[tool.pytest.ini_options]
+testpaths = ["./tests"]
+asyncio_mode = "auto"

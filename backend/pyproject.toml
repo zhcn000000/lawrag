@@ -132,7 +132,7 @@ python-version = "3.14"
 python = ".venv/bin/python"
 
 [tool.ty.src]
-include = ["lawrag"]
+include = ["lawrag", "tests"]
 
 [tool.ty.rules]
 division-by-zero = "error"

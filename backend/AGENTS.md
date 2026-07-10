@@ -6,7 +6,7 @@ Python 3.14 后端，基于 FastAPI + pydantic-ai 的法律 RAG 系统。
 
 - **运行时**: Python >= 3.14, < 3.15
 - **Web 框架**: FastAPI + uvicorn (5 workers, uvloop)
-- **AI 编排**: pydantic-ai；首选自托管 vLLM (`chat/chat_model.py` 中 `VLLMChatModel` + `VLLMProvider`，默认 `qwen3.5`)，通过环境变量开关 `USE_SELFHOSTED_LLM=True` 启用；未启用时回退到 `deepseek-v4-flash via DeepSeekProvider`（依赖 `DEEPSEEK_API_KEY`，可选）。`chat/model.py:20-26` 决定实际用哪个 provider
+- **AI 编排**: pydantic-ai；固定使用自托管 OpenAI 兼容 vLLM (`chat/chat_model.py` 中 `VLLMChatModel` + `VLLMProvider`，默认 `qwen3.5`)，通过 `.env` 中 `LLM_PROTOCOL/LLM_HOST/LLM_PORT` 拼出 `LLM_LINK`；不再回退到 DSAPI/DeepSeek。`chat/model.py:15` 从 `chat_model.get_model()` 取得模型
 - **嵌入/重排**: `qwen3-embedding` (4096 维) + `qwen3-reranker`，统一通过同一个 OpenAI 兼容端点 `LLM_LINK`（默认 `http://127.0.0.1:40002/v1`），路径 `/v1/embeddings` 与 `/v1/rerank`。`documents/embedder.py:12` 用 `settings.LLM_LINK` 拼接 URL，与 chat 模型共用同一部署
 - **数据库**: PostgreSQL 18 + `pgvector` (`vector/halfvec/sparsevec/bit/hstore`) + `vchord` / `vchord_bm25` 提供向量 + BM25 索引；SQLAlchemy/SQLModel 异步
 - **CLI**: typer（入口 `lawrag`）
@@ -34,7 +34,7 @@ backend/
 │   │   ├── user.py            # /api/users CRUD
 │   │   └── schema.py          # 所有 Pydantic 请求/响应模型
 │   ├── chat/
-│   │   ├── model.py           # pydantic-ai Agent 装配 (USE_SELFHOSTED_LLM 切 vLLM / 回退 DeepSeekProvider + toolsets)
+│   │   ├── model.py           # pydantic-ai Agent 装配 (VLLMChatModel + toolsets)
 │   │   ├── chat_model.py      # 自托管 vLLM 适配层: VLLMChatModel + VLLMProvider + get_model() (默认 qwen3.5)
 │   │   ├── struct.py          # ModelDeps (select_toolset)
 │   │   ├── rag_tools.py       # rag_toolset: list_laws / search_documents / get_article_by_path / get_law_articles / get_law_toc / browse_law
@@ -87,8 +87,11 @@ data/
 ├── law_index/law_index.json           # spider crawl 产物
 ├── downloaded_laws/*.docx             # spider download 原始文件
 ├── raw_laws/<law_name>.txt            # markitdown 转换结果
-└── structured_laws/<law_name>.json    # parse_multi_level 输出的 JSON 序列化结果 (pageindex import 输入)
+├── structured_laws/<law_name>.json    # parse_multi_level 输出的 JSON 序列化结果 (pageindex import 输入)
+└── eval/report.json                   # eval run 默认输出
 ```
+
+仓库根 `report/report.json` 是课程提交版 100 条问答评测结果。
 
 ## 包管理与开发命令
 
@@ -141,7 +144,7 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 - `search <law_name> <query> [-l LIMIT]`（按 content ILIKE 过滤；**注意**：`__main__.pageindex_search` 是顶层命令，此处为局部 ILIKE 过滤，名称易混淆）
 - `embed [law_name] [-s CHUNK_SIZE] [-o CHUNK_OVERLAP] [-b BATCH_SIZE]`（走 `LawPageIndex.aembed_law_articles` → `DocumentStore.abatch_load_from_texts`）
 
-`eval run [-n MAX_CASES] [-o OUTPUT]` — 跑 `lawrag.eval.dataset.cases` 中的法律问答样本：用 Agent 生成答案并与标准答案对比，由 LLMJudge 打分；结果以 rich 表格展示并以 JSON 写入 `<DATA_ROOT>/eval/report.json`。内置 100 条以《劳动合同法》为主的 Case。
+`eval run [-n MAX_CASES] [-o OUTPUT]` — 跑 `lawrag.eval.dataset.cases` 中的法律问答样本：用 Agent 生成答案并与标准答案对比，由 LLMJudge 打分；结果以 rich 表格展示并以 JSON 写入 `<DATA_ROOT>/eval/report.json`。仓库根 `report/report.json` 保留课程提交版完整结果。内置 100 条以《劳动合同法》为主的 Case。
 
 仓库根目录 `justfile` 一键命令：`just web` / `just initdb` / `just eval` / `backend-format|lint|typecheck` 等（详见仓库根 `justfile`）。
 
@@ -164,8 +167,6 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 | `SSL_KEY_PATH` / `SSL_CERT_PATH` | – | 可选 HTTPS |
 | `LLM_PROTOCOL` / `LLM_HOST` / `LLM_PORT` | – | `http` / `127.0.0.1` / `40002`；拼接成 `LLM_LINK = <scheme>://<host>:<port>/v1`，供 `chat/chat_model.py` 与 `documents/embedder.py` 复用 |
 | `LLM_LINK` | – | computed，由上面三个变量派生 (`HttpUrl`)，含尾随 `/v1` |
-| `USE_SELFHOSTED_LLM` | – | `False`；为 `True` 时 `chat/model.py` 选用自托管 vLLM (`chat/chat_model.py`) |
-| `DEEPSEEK_API_KEY` | – | `USE_SELFHOSTED_LLM=False` 时的回退 provider；缺失则 Agent 不可用（`lawrag/chat/model.py:22-26`） |
 | `USER_AGENT` | – | 默认 Chrome UA（覆盖爬虫反爬） |
 
 `find_project_directory()` 会沿父目录向上寻找 `.proj_root` 标记文件；找到后 `os.chdir` 至该目录，确保数据库脚本与相对路径一致。

@@ -86,3 +86,8 @@ docker-down:
 # 首次跑：initdb → spider-crawl → spider-download → pageindex-import → pageindex-embed → build-ui → web
 setup: initdb spider-crawl spider-download pageindex-import pageindex-embed build-ui
   @echo "完成。运行 'just web' 启动服务，'just ui' 启动前端开发服务器。"
+
+# ─── LLMServer ──────────────────────────────────────────────────────────────
+
+llmserver:
+  cd llmserver && uv run llmserver

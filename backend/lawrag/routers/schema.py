@@ -38,7 +38,7 @@ class UpdateUserRequest(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     regex: str | None = None
-    offset: int = 0
+    vecweight: float = 0.6
     k: int = 4
 
 

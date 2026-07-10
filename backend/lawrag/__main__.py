@@ -82,10 +82,19 @@ async def database_clean(
 @runnify
 async def pageindex_search(
     query: Annotated[str, Argument(help="Search query")],
+    law_name: Annotated[str | None, Option("--law", "-l", help="Filter by law name")] = None,
+    regex: Annotated[str | None, Option("--regex", "-r", help="Filter by regex pattern")] = None,
     limit: Annotated[int, Option("--limit", "-k", help="Number of results")] = 5,
+    vecweight: Annotated[float, Option("--vector-weight", "-v", help="Vector search weight")] = 0.6,
 ) -> None:
     rag = RAGMode()
-    docs = await rag.ahyprid_search(query=query, limit=limit)
+    docs = await rag.ahyprid_search(
+        query=query,
+        limit=limit,
+        law_name=law_name,
+        regex=regex,
+        vecweight=vecweight,
+    )
 
     if docs:
         table = Table(title=f'搜索结果: "{query}"', title_style="bold")

@@ -1,6 +1,7 @@
 from operator import itemgetter
 from uuid import UUID
 
+from asyncer import create_task_group
 from sqlalchemy import cast, func, select
 from sqlalchemy.sql.functions import count
 from sqlmodel import col
@@ -51,112 +52,92 @@ class RAGMode:
     def __init__(self, dbname: str | None = None) -> None:
         self.__db = DatabaseManager(dbname)
 
-    @staticmethod
     async def _vector_search(
+        self,
         query: str,
         topn: int,
-        session,
         law_name: str | None = None,
         regex: str | None = None,
     ) -> list[UUID]:
         query_vectors = await aembed_documents([query])
         query_vector = query_vectors[0]
 
-        stmt = select(col(DocumentTable.id))
-        if law_name:
-            stmt = stmt.where(
-                col(DocumentTable.node_id).in_(
-                    select(col(LawNode.id)).where(col(LawNode.law_name) == law_name),
-                ),
-            )
-        if regex:
-            stmt = stmt.where(col(DocumentTable.content).regexp_match(regex))
-        stmt = stmt.order_by(
-            col(DocumentTable.vector).l2_distance(query_vector),  # type: ignore
-        ).limit(topn)
+        async with self.__db.asession() as session:
+            stmt = select(col(DocumentTable.id))
+            if law_name:
+                stmt = stmt.where(
+                    col(DocumentTable.node_id).in_(
+                        select(col(LawNode.id)).where(col(LawNode.law_name) == law_name),
+                    ),
+                )
+            if regex:
+                stmt = stmt.where(col(DocumentTable.content).regexp_match(regex))
+            stmt = stmt.order_by(
+                col(DocumentTable.vector).l2_distance(query_vector),  # type: ignore
+            ).limit(topn)
 
-        result = await session.execute(stmt)
-        return [row[0] for row in result.fetchall()]
+            result = await session.execute(stmt)
+            return [row[0] for row in result.fetchall()]
 
-    @staticmethod
     async def _bm25_search(
+        self,
         query: str,
         topn: int,
-        session,
         law_name: str | None = None,
         regex: str | None = None,
     ) -> list[UUID]:
         query_count = await atokenize_document(query)
+        async with self.__db.asession() as session:
+            stmt = select(col(DocumentTable.id))
+            if law_name:
+                stmt = stmt.where(
+                    col(DocumentTable.node_id).in_(
+                        select(col(LawNode.id)).where(col(LawNode.law_name) == law_name),
+                    ),
+                )
+            if regex:
+                stmt = stmt.where(col(DocumentTable.content).regexp_match(regex))
 
-        stmt = select(col(DocumentTable.id))
-        if law_name:
-            stmt = stmt.where(
-                col(DocumentTable.node_id).in_(
-                    select(col(LawNode.id)).where(col(LawNode.law_name) == law_name),
+            stmt = stmt.order_by(
+                col(DocumentTable.bmvector).neg_bm25_rank(  # type: ignore
+                    func.to_bm25query("ix_documents_bmvector", cast(query_count, BM25Vector)),
                 ),
-            )
-        if regex:
-            stmt = stmt.where(col(DocumentTable.content).regexp_match(regex))
+            ).limit(topn)
 
-        stmt = stmt.order_by(
-            col(DocumentTable.bmvector).neg_bm25_rank(  # type: ignore
-                func.to_bm25query("ix_documents_bmvector", cast(query_count, BM25Vector)),
-            ),
-        ).limit(topn)
+            result = await session.execute(stmt)
+            return [row[0] for row in result.fetchall()]
 
-        result = await session.execute(stmt)
-        return [row[0] for row in result.fetchall()]
-
-    @staticmethod
-    def _rrf_fusion(
-        ranked_lists: list[list[UUID]],
-        k: int = 60,
-        topn: int = 10,
-    ) -> list[UUID]:
-        scores: dict[UUID, float] = {}
-        for ranked_ids in ranked_lists:
-            for rank, doc_id in enumerate(ranked_ids):
-                scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (k + rank + 1)
-        sorted_ids = sorted(scores.items(), key=itemgetter(1), reverse=True)
-        return [doc_id for doc_id, _ in sorted_ids[:topn]]
-
-    @staticmethod
-    async def _load_nodes_with_ancestors(node_ids: list[UUID], session) -> dict[UUID, LawNode]:
-        """加载给定节点及其全部祖先 (沿 parent_id 逐层上溯)。"""
-        node_map: dict[UUID, LawNode] = {}
-        pending: set[UUID] = set(node_ids)
-        while pending:
-            rows = (await session.execute(select(LawNode).where(col(LawNode.id).in_(pending)))).scalars().all()
-            pending = set()
-            for node in rows:
-                node_map[node.id] = node
-                if node.parent_id is not None and node.parent_id not in node_map:
-                    pending.add(node.parent_id)
-        return node_map
-
-    async def _fetch_documents(self, doc_ids: list[UUID], session) -> list[Document]:
+    async def _fetch_documents(self, doc_ids: list[UUID]) -> list[Document]:
         if not doc_ids:
             return []
-        stmt = select(DocumentTable).where(col(DocumentTable.id).in_(doc_ids))
-        result = await session.execute(stmt)
-        rows = result.scalars().all()
+        async with self.__db.asession() as session:
+            stmt = select(DocumentTable).where(col(DocumentTable.id).in_(doc_ids))
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
 
-        node_ids = [row.node_id for row in rows if row.node_id is not None]
-        node_map = await self._load_nodes_with_ancestors(node_ids, session)
-
-        documents: list[Document] = []
-        for row in rows:
-            node = node_map.get(row.node_id) if row.node_id is not None else None
-            documents.append(
-                Document(
-                    content=row.content or "",
-                    name=node.law_name if node else None,
-                    page_index=_node_breadcrumb(node, node_map) if node else None,
-                    node_path=node.path if node else None,
-                    id=row.id,
-                ),
-            )
-        return documents
+            node_ids = [row.node_id for row in rows if row.node_id is not None]
+            node_map: dict[UUID, LawNode] = {}
+            pending: set[UUID] = set(node_ids)
+            while pending:
+                node_rows = (await session.execute(select(LawNode).where(col(LawNode.id).in_(pending)))).scalars().all()
+                pending = set()
+                for node in node_rows:
+                    node_map[node.id] = node
+                    if node.parent_id is not None and node.parent_id not in node_map:
+                        pending.add(node.parent_id)
+            documents: list[Document] = []
+            for row in rows:
+                node = node_map.get(row.node_id) if row.node_id is not None else None
+                documents.append(
+                    Document(
+                        content=row.content or "",
+                        name=node.law_name if node else None,
+                        page_index=_node_breadcrumb(node, node_map) if node else None,
+                        node_path=node.path if node else None,
+                        id=row.id,
+                    ),
+                )
+            return documents
 
     async def ahyprid_search(
         self,
@@ -164,52 +145,58 @@ class RAGMode:
         limit: int = 4,
         law_name: str | None = None,
         regex: str | None = None,
-        vector_weight: float = 0.6,
-        bm25_weight: float = 0.4,
-        offset: int = 0,
-        use_rerank: bool = True,
+        vecweight: float = 0.6,
+        rrfk: int = 60,
     ) -> list[Document]:
-        async with self.__db.asession() as session:
-            search_topn = max(limit * 3, 15)
+        assert vecweight >= 0 and vecweight <= 1, "vecweight must be between 0 and 1"
+        search_topn = max(limit * 5, 15)
+        async with create_task_group() as tg:
+            if vecweight > 0:
+                vector_task = tg.soonify(self._vector_search)(
+                    query=query,
+                    topn=search_topn,
+                    law_name=law_name,
+                    regex=regex,
+                )
+            if vecweight < 1:
+                bm25_task = tg.soonify(self._bm25_search)(
+                    query=query,
+                    topn=search_topn,
+                    law_name=law_name,
+                    regex=regex,
+                )
 
-            vector_ids = await self._vector_search(
-                query=query,
-                topn=search_topn,
-                session=session,
-                law_name=law_name,
-                regex=regex,
-            )
+        ranked_lists: list[tuple[list[UUID], float]] = []
 
-            bm25_ids = await self._bm25_search(
-                query=query,
-                topn=search_topn,
-                session=session,
-                law_name=law_name,
-                regex=regex,
-            )
+        if vecweight > 0:
+            vector_ids = vector_task.value  # type: ignore
+            ranked_lists.append((vector_ids, vecweight))
 
-            ranked_lists: list[list[UUID]] = []
-            if vector_weight > 0 and vector_ids:
-                ranked_lists.append(vector_ids)
-            if bm25_weight > 0 and bm25_ids:
-                ranked_lists.append(bm25_ids)
+        if vecweight < 1:
+            bm25_ids = bm25_task.value  # type: ignore
+            ranked_lists.append((bm25_ids, 1.0 - vecweight))
 
-            if not ranked_lists:
-                return []
+        if not ranked_lists:
+            return []
 
-            fused_ids = self._rrf_fusion(ranked_lists, topn=search_topn)
-            fused_ids = fused_ids[offset : offset + limit]
+        scores: dict[UUID, float] = {}
+        for ranked_ids, weight in ranked_lists:
+            for rank, doc_id in enumerate(ranked_ids):
+                scores[doc_id] = scores.get(doc_id, 0) + weight / (rrfk + rank + 1)
+        sorted_ids = sorted(scores.items(), key=itemgetter(1), reverse=True)
 
-            documents = await self._fetch_documents(fused_ids, session)
+        rerank_pool_size = max(limit * 3, 10)
+        fused_ids = [doc_id for doc_id, _ in sorted_ids[:rerank_pool_size]]
 
-            if use_rerank:
-                documents = await arerank_documents(query, documents, topn=limit)
+        documents = await self._fetch_documents(fused_ids)
 
-            for doc in documents:
-                doc.query_score = doc.query_score or 0.0
+        documents = await arerank_documents(query, documents, topn=limit)
 
-            documents.sort(key=lambda d: d.query_score or 0, reverse=True)
-            return documents
+        for doc in documents:
+            doc.query_score = doc.query_score or 0.0
+
+        documents.sort(key=lambda d: d.query_score or 0, reverse=True)
+        return documents
 
     async def alist_laws(self) -> list[dict]:
         async with self.__db.asession() as session:

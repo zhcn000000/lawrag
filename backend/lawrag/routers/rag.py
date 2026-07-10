@@ -33,7 +33,7 @@ async def api_search(request: SearchRequest) -> SearchResponse:
             query=request.query,
             limit=request.k,
             regex=request.regex,
-            offset=request.offset,
+            vecweight=request.vecweight,
         )
         results = [
             SearchItem(

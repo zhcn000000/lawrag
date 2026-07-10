@@ -101,12 +101,26 @@ class DocumentResult(TypedDict):
 async def search_documents(
     ctx: RunContext[ModelDeps],
     query: Annotated[str, Field(description="搜索查询语句")],
-    regex: Annotated[str | None, Field(description="可选的正则表达式，用于过滤文档内容")] = None,
+    law_name: Annotated[str | None, Field(description="可选按照法律过滤内容，留空或不填写则在所有法律范围搜索")] = None,
+    regex: Annotated[str | None, Field(description="可选的正则表达式，用于过滤文档内容，留空或不填写则不过滤")] = None,
     limit: Annotated[int, Field(description="返回结果数量上限")] = 5,
-    offset: Annotated[int, Field(description="分页偏移量,默认0")] = 0,
+    vecweight: Annotated[
+        float,
+        Field(
+            description="向量搜索的权重，1-向量搜索权重即为bm25搜索权重，搜索为bm25+向量双通道，修改权重可以调节搜索侧重点",
+            ge=0,
+            le=1,
+        ),
+    ] = 0.6,
 ) -> Annotated[list[DocumentResult], Field(description="搜索结果列表，每项含 content/name/path/score/source")]:
     try:
-        docs = await rag_mode.ahyprid_search(query=query, limit=limit, regex=regex, offset=offset)
+        docs = await rag_mode.ahyprid_search(
+            query=query,
+            law_name=law_name,
+            limit=limit,
+            regex=regex,
+            vecweight=vecweight,
+        )
         return [
             DocumentResult(
                 content=doc.content,

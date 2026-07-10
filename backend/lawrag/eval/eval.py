@@ -1,7 +1,9 @@
+from pydantic_evals import Case
+
 from lawrag.chat.model import agent
 from lawrag.chat.struct import ModelDeps
 
-from .dataset import LawRagCaseReport, LawRagFailureReport, get_dataset
+from .dataset import LawRagCase, LawRagCaseFailure, LawRagCaseReport, get_dataset
 
 
 async def task(text: str) -> str:
@@ -9,12 +11,24 @@ async def task(text: str) -> str:
     return result.output
 
 
-async def evaluate(max_cases: int | None = None) -> list[LawRagCaseReport | LawRagFailureReport]:
-    dataset = get_dataset(max_cases=max_cases)
+async def evaluate(cases: list[LawRagCase], max_cases: int | None = None) -> list[LawRagCaseReport | LawRagCaseFailure]:
+    if cases is not None:
+        dataset_cases = [
+            Case(
+                name=case.name,
+                inputs=case.question,
+                expected_output=case.expected_answer,
+            )
+            for case in cases
+        ]
+    else:
+        dataset_cases = None
+    dataset = get_dataset(cases=dataset_cases, max_cases=max_cases)
     results = await dataset.evaluate(task=task)
-    reports: list[LawRagCaseReport | LawRagFailureReport] = []
+    reports: list[LawRagCaseReport | LawRagCaseFailure] = []
     for case in results.cases:
         report = LawRagCaseReport(
+            name=case.name,
             question=case.inputs,
             expected_answer=case.expected_output or "",
             model_output=case.output,
@@ -23,7 +37,8 @@ async def evaluate(max_cases: int | None = None) -> list[LawRagCaseReport | LawR
         )
         reports.append(report)
     for case in results.failures:
-        report = LawRagFailureReport(
+        report = LawRagCaseFailure(
+            name=case.name,
             question=case.inputs,
             expected_answer=case.expected_output or "",
             error_message=case.error_message,

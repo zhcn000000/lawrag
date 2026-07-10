@@ -1,10 +1,3 @@
-"""Content download spider using Scrapy to fetch law documents from NPC database.
-
-Downloads law docx/html files via a two-step request chain:
-  1. Call /download/pc API to obtain a signed OBS download URL
-  2. Download the actual document from the signed URL
-"""
-
 import json
 import logging
 import re

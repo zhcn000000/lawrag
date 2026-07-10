@@ -1,5 +1,3 @@
-"""Scrapy items for law spider."""
-
 from scrapy.item import Field, Item
 
 

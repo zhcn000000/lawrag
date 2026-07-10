@@ -1,5 +1,3 @@
-"""Pipelines for law spider."""
-
 import json
 import logging
 from pathlib import Path

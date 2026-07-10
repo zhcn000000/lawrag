@@ -1,8 +1,3 @@
-"""Async law spider runner using Scrapy's native asyncio support (AsyncCrawlerRunner).
-
-Uses TWISTED_REACTOR_ENABLED=False for pure asyncio mode without a Twisted reactor.
-"""
-
 import json
 import logging
 from pathlib import Path

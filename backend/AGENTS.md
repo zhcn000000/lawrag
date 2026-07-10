@@ -17,7 +17,7 @@ Python 3.14 后端，基于 FastAPI + pydantic-ai 的法律 RAG 系统。
 - **代码沙盒**: pydantic-monty（受限 Python REPL，仅可用 sys/typing/asyncio）
 - **Web 搜索**: exa-py（`search_web`）+ httpx + BeautifulSoup（`fetch_web`）
 - **鉴权**: pyjwt (HS256) + PostgreSQL `crypt()/gen_salt('bf')` 存密码哈希
-- **评估**: pydantic-evals + LLMJudge（`backend/lawrag/eval/dataset.py` 内置 100 条样例）
+- **评估**: pydantic-evals + LLMJudge（测试样本从 `examples/testset.json` 读取，默认 100 条）
 - **前端资源**: FastAPI 把仓库根 `static/`（由 `just build-ui` 产出）挂载到 `/webui/*`
 
 ## 项目结构
@@ -41,8 +41,8 @@ backend/
 │   │   ├── code_tools.py      # code_toolset: python_repl (pydantic-monty)
 │   │   ├── web_tools.py       # web_toolset: search_web (exa) / fetch_web (httpx + bs4)
 │   │   └── subagent_tools.py  # subagent_toolset: subagent 调度 explore_agent / general_agent
-│   ├── eval/                  # 评测：pydantic-evals + LLMJudge 内置 100 条法律问答样本
-│   │   ├── dataset.py         #   100 条 Case (以 `pydantic_evals.Dataset` 暴露 `cases/get_dataset`)
+│   ├── eval/                  # 评测：pydantic-evals + LLMJudge，样本从 examples/testset.json 读取
+│   │   ├── dataset.py         #   get_dataset + evaluators + LawRagCase/Report 数据模型
 │   │   └── eval.py            #   evaluate(): 跑 Agent + LLMJudge，返回 LawRagCaseReport 列表
 │   ├── database/
 │   │   ├── __init__.py        # 导出 UserManager / init_db / reset_db / clean_db
@@ -69,9 +69,7 @@ backend/
 │   │   ├── runner.py          # AsyncCrawlerRunner 入口 (run_law_index_spider / run_content_download)
 │   │   ├── pipelines.py       # LawIndexPipeline, ContentDownloadPipeline (markitdown → parse_multi_level → json.dumps)
 │   │   └── items.py           # LawIndexItem / LawDownloadItem
-│   └── utils/
-│       ├── environments.py    # pydantic-settings 配置 + 自动向上查找 .proj_root
-│       └── templete.py        # FIRST_INPUT_TEMPLATE 兜底 system prompt
+│   └── environments.py        # pydantic-settings 配置 + 自动向上查找 .proj_root
 ├── tests/
 │   ├── conftest.py            # anyio_backend=asyncio
 │   ├── test_lawparser.py      # cn_to_int / flatten_hierarchy / parse_multi_level / TOC
@@ -91,7 +89,7 @@ data/
 └── eval/report.json                   # eval run 默认输出
 ```
 
-仓库根 `report/report.json` 是课程提交版 100 条问答评测结果。
+仓库根 `examples/report.json` 是课程提交版 100 条问答评测结果。
 
 ## 包管理与开发命令
 
@@ -144,7 +142,7 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 - `search <law_name> <query> [-l LIMIT]`（按 content ILIKE 过滤；**注意**：`__main__.pageindex_search` 是顶层命令，此处为局部 ILIKE 过滤，名称易混淆）
 - `embed [law_name] [-s CHUNK_SIZE] [-o CHUNK_OVERLAP] [-b BATCH_SIZE]`（走 `LawPageIndex.aembed_law_articles` → `DocumentStore.abatch_load_from_texts`）
 
-`eval run [-n MAX_CASES] [-o OUTPUT]` — 跑 `lawrag.eval.dataset.cases` 中的法律问答样本：用 Agent 生成答案并与标准答案对比，由 LLMJudge 打分；结果以 rich 表格展示并以 JSON 写入 `<DATA_ROOT>/eval/report.json`。仓库根 `report/report.json` 保留课程提交版完整结果。内置 100 条以《劳动合同法》为主的 Case。
+`eval run [-i INPUT] [-n MAX_CASES] [-o OUTPUT]` — 跑法律问答样本：从 JSON 测试集（`-i`，默认仓库根 `examples/testset.json`）读取问答样本，用 Agent 生成答案并与标准答案对比，由 LLMJudge 打分；结果以 rich 表格展示并以 JSON 写入 `<DATA_ROOT>/eval/report.json`。仓库根 `examples/report.json` 保留课程提交版完整结果。默认 100 条以《劳动合同法》为主的样本。
 
 仓库根目录 `justfile` 一键命令：`just web` / `just initdb` / `just eval` / `backend-format|lint|typecheck` 等（详见仓库根 `justfile`）。
 
@@ -152,22 +150,22 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 
 通过 `<repo>/.env` 加载（`lawrag/utils/environments.py` 自动向上查找 `.proj_root`）；环境变量别名使用 `Annotated[..., Field(alias=...)]`：
 
-| 变量 | alias | 默认 |
-| --- | --- | --- |
-| `FASTAPI_HOST` / `FASTAPI_PORT` | – | `127.0.0.1` / `40001` |
-| `POSTGRES_HOST` / `POSTGRES_PORT` | – | `127.0.0.1` / `10004` |
-| `POSTGRES_USER` / `POSTGRES_DB` / `POSTGRES_PASSWORD` | – | `postgres` / `data` / `postgres_password` |
-| `POSTGRES_DSN` | – | 由上述字段派生 (`postgresql+psycopg://...`) |
-| `LAWRAG_DATA_ROOT` | `RAG_DATA_ROOT` | `<proj>/data` |
-| `LAWRAG_UUID_SEED` | `RAG_UUID_SEED` | 固定 UUID `11fa063e-...` |
-| `RAG_RELEASE_MODE` | – | `True`（False 时启动会发警告） |
-| `RAG_TMP_DIR` | – | `mkdtemp()` |
-| `RAG_TOKEN_EXPIRES_IN` | – | `21600`（秒，6 小时） |
-| `JWT_SECRET` | – | 默认值，生产必须改 |
-| `SSL_KEY_PATH` / `SSL_CERT_PATH` | – | 可选 HTTPS |
-| `LLM_PROTOCOL` / `LLM_HOST` / `LLM_PORT` | – | `http` / `127.0.0.1` / `40002`；拼接成 `LLM_LINK = <scheme>://<host>:<port>/v1`，供 `chat/chat_model.py` 与 `documents/embedder.py` 复用 |
-| `LLM_LINK` | – | computed，由上面三个变量派生 (`HttpUrl`)，含尾随 `/v1` |
-| `USER_AGENT` | – | 默认 Chrome UA（覆盖爬虫反爬） |
+| 变量                                                  | alias           | 默认                                                                                                                                     |
+| ----------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `FASTAPI_HOST` / `FASTAPI_PORT`                       | –               | `127.0.0.1` / `40001`                                                                                                                    |
+| `POSTGRES_HOST` / `POSTGRES_PORT`                     | –               | `127.0.0.1` / `10004`                                                                                                                    |
+| `POSTGRES_USER` / `POSTGRES_DB` / `POSTGRES_PASSWORD` | –               | `postgres` / `data` / `postgres_password`                                                                                                |
+| `POSTGRES_DSN`                                        | –               | 由上述字段派生 (`postgresql+psycopg://...`)                                                                                              |
+| `LAWRAG_DATA_ROOT`                                    | `RAG_DATA_ROOT` | `<proj>/data`                                                                                                                            |
+| `LAWRAG_UUID_SEED`                                    | `RAG_UUID_SEED` | 固定 UUID `11fa063e-...`                                                                                                                 |
+| `RAG_RELEASE_MODE`                                    | –               | `True`（False 时启动会发警告）                                                                                                           |
+| `RAG_TMP_DIR`                                         | –               | `mkdtemp()`                                                                                                                              |
+| `RAG_TOKEN_EXPIRES_IN`                                | –               | `21600`（秒，6 小时）                                                                                                                    |
+| `JWT_SECRET`                                          | –               | 默认值，生产必须改                                                                                                                       |
+| `SSL_KEY_PATH` / `SSL_CERT_PATH`                      | –               | 可选 HTTPS                                                                                                                               |
+| `LLM_PROTOCOL` / `LLM_HOST` / `LLM_PORT`              | –               | `http` / `127.0.0.1` / `40002`；拼接成 `LLM_LINK = <scheme>://<host>:<port>/v1`，供 `chat/chat_model.py` 与 `documents/embedder.py` 复用 |
+| `LLM_LINK`                                            | –               | computed，由上面三个变量派生 (`HttpUrl`)，含尾随 `/v1`                                                                                   |
+| `USER_AGENT`                                          | –               | 默认 Chrome UA（覆盖爬虫反爬）                                                                                                           |
 
 `find_project_directory()` 会沿父目录向上寻找 `.proj_root` 标记文件；找到后 `os.chdir` 至该目录，确保数据库脚本与相对路径一致。
 

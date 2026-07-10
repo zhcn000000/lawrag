@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 import uvicorn
 import uvloop
 from asyncer import runnify
+from pydantic import TypeAdapter
 from rich import print as rprint
 from rich import traceback
 from rich.logging import RichHandler
@@ -16,7 +17,9 @@ from lawrag.database.initdb import clean_db, init_db, reset_db
 from lawrag.database.pageindex import LawPageIndex, TocEntryDict
 from lawrag.database.ragmode import RAGMode
 from lawrag.documents.lawparser import has_parsed_content, parse_multi_level
-from lawrag.environments import settings
+from lawrag.environments import find_project_directory, settings
+from lawrag.eval.dataset import LawRagCase, LawRagCaseFailure, LawRagCaseReport
+from lawrag.eval.eval import evaluate
 from lawrag.routers import app
 from lawrag.spider.runner import run_content_download, run_law_index_spider
 
@@ -318,22 +321,26 @@ async def spider_download(
 @eval_cmd.command("run")
 @runnify
 async def eval_run(
+    input: Annotated[Path | None, Option("--input", "-i", help="评估样本 JSON 输入路径")] = None,
     max_cases: Annotated[int | None, Option("--max-cases", "-n", help="最多评估的样本数, 默认全部")] = None,
     output: Annotated[Path | None, Option("--output", "-o", help="评估报告 JSON 输出路径")] = None,
 ) -> None:
     """运行法律问答测试集, 用 LLM 裁判评估 Agent 输出并生成报告。
 
-    读取 ``lawrag.eval.dataset.cases`` 中的问答样本, 逐条调用 Agent 生成回答,
+    从 JSON 测试集文件 (默认 ``examples/testset.json``) 读取问答样本, 逐条调用 Agent 生成回答,
     与标准答案对比后由 LLM 裁判判定是否通过, 结果以 rich 表格展示并写入 JSON。
     """
-    from lawrag.eval import LawRagCaseReport, evaluate
-
     if output is None:
         output = settings.DATA_ROOT / "eval" / "report.json"
     output.parent.mkdir(parents=True, exist_ok=True)
 
+    if input is None:
+        input = find_project_directory() / "examples" / "case.json"
+
+    cases = TypeAdapter(list[LawRagCase]).validate_json(input.read_bytes())
+
     logger.info("开始评估 (最多 %s 条样本)...", max_cases if max_cases is not None else "全部")
-    reports = await evaluate(max_cases=max_cases)
+    reports = await evaluate(cases, max_cases=max_cases)
 
     passed = sum(1 for r in reports if r.success)
     total = len(reports)
@@ -351,9 +358,8 @@ async def eval_run(
         table.add_row(mark, question, note)
     rprint(table)
 
-    output.write_text(
-        json.dumps([r.model_dump() for r in reports], ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    output.write_bytes(
+        TypeAdapter(list[LawRagCaseReport | LawRagCaseFailure]).dump_json(reports, indent=2, ensure_ascii=False),
     )
     rate = passed / total if total else 0.0
     rprint(f"通过率: {rate:.1%} ({passed}/{total})")

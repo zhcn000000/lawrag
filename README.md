@@ -15,7 +15,7 @@
   - **Subagent** —— 把任务委派给 `explore_agent`(纯检索) / `general_agent`(全工具);
 - 💬 **流式多轮对话**: pydantic-ai `ModelMessage` 完整持久化到 PostgreSQL, 跨会话/重启上下文不丢;
 - 🖥️ **可视化前端**: Vite 8 + React 19 + TypeScript 7.0-rc + antd 6 + Emotion + Redux Toolkit, Markdown 内嵌 Mermaid 与 Infographic;
-- 📊 **评估闭环**: 内置 100 条以《劳动合同法》为主的问答样本 (满足"每组至少 100 条"要求), 用 pydantic-evals + LLMJudge 跑通, 已在 `report/report.json` 保存评测结果;
+- 📊 **评估闭环**: 内置 100 条以《劳动合同法》为主的问答样本 (满足"每组至少 100 条"要求), 用 pydantic-evals + LLMJudge 跑通, 已在 `examples/report.json` 保存评测结果;
 - 🐳 **容器化**: 提供 `podman-compose` 一键拉起 PostgreSQL18 + 应用容器 (本地端口 `40001/40002`).
 
 ## 🗂️ 仓库结构
@@ -53,7 +53,7 @@ lawrag/
 │   ├── downloaded_laws/*.docx     # 原始 docx
 │   ├── raw_laws/*.txt            # markitdown 转出的纯文本
 │   └── structured_laws/*.json     # parse_multi_level 输出的层级结构
-├── report/                 # 已提交的评测结果
+├── examples/                 # 已提交的评测结果
 │   └── report.json         # 100 条问答样本的 Agent 输出与 LLMJudge 评价
 ├── static/                 # `just build-ui` 把 frontend/dist 拷贝到这里, 由 FastAPI /webui/* 挂载
 ├── .proj_root              # 环境变量自动向上查找的仓库根标记
@@ -69,16 +69,16 @@ lawrag/
 
 ## 🧰 技术栈
 
-| 模块 | 选型 |
-| --- | --- |
-| 本地 LLM | 仓库内 `llmserver/` 提供自托管 OpenAI 兼容 vLLM 后端 (`qwen3.5`)，`backend/lawrag/chat/chat_model.py` 通过 `LLM_LINK` 调用 |
-| 模型后端 | `llmserver` (FastAPI + vLLM 0.24)，按 `llmserver/model_launch.json` 同时加载 `qwen3.5`、`qwen3-embedding`、`qwen3-reranker`，暴露 `/v1/chat/completions`、`/v1/embeddings`、`/v1/rerank` |
-| 文档爬取 | Python `scrapy` (`AsyncCrawlerRunner`) + 可选 `selenium` |
-| 文本切分 | `spaCy` + `zh_core_web_trf` 句切分 + token overlap |
-| 嵌入/重排 | `qwen3-embedding` (4096 维) + `qwen3-reranker`，统一通过 `LLM_LINK`（`chat` 与 `embedder` 复用同一端点） |
-| 检索 | PostgreSQL 18 + `pgvector` (vector/halfvec/sparsevec) + `vchord` / `vchord_bm25` (BM25) |
-| Agent 框架 | pydantic-ai (Agent + Capability + Subagent) |
-| 系统界面 | FastAPI 0.119 (uvicorn 5 workers) + Vite 8 / React 19 / antd 6 / Emotion |
+| 模块       | 选型                                                                                                                                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 本地 LLM   | 仓库内 `llmserver/` 提供自托管 OpenAI 兼容 vLLM 后端 (`qwen3.5`)，`backend/lawrag/chat/chat_model.py` 通过 `LLM_LINK` 调用                                                               |
+| 模型后端   | `llmserver` (FastAPI + vLLM 0.24)，按 `llmserver/model_launch.json` 同时加载 `qwen3.5`、`qwen3-embedding`、`qwen3-reranker`，暴露 `/v1/chat/completions`、`/v1/embeddings`、`/v1/rerank` |
+| 文档爬取   | Python `scrapy` (`AsyncCrawlerRunner`) + 可选 `selenium`                                                                                                                                 |
+| 文本切分   | `spaCy` + `zh_core_web_trf` 句切分 + token overlap                                                                                                                                       |
+| 嵌入/重排  | `qwen3-embedding` (4096 维) + `qwen3-reranker`，统一通过 `LLM_LINK`（`chat` 与 `embedder` 复用同一端点）                                                                                 |
+| 检索       | PostgreSQL 18 + `pgvector` (vector/halfvec/sparsevec) + `vchord` / `vchord_bm25` (BM25)                                                                                                  |
+| Agent 框架 | pydantic-ai (Agent + Capability + Subagent)                                                                                                                                              |
+| 系统界面   | FastAPI 0.119 (uvicorn 5 workers) + Vite 8 / React 19 / antd 6 / Emotion                                                                                                                 |
 
 > 默认部署把 chat 与 embedding/rerank 集中到同一个 OpenAI 兼容 vLLM 端点（即同一个 `LLM_LINK`），可直接使用仓库内 `llmserver/` 启动模型后端；`.env` 中的 `LLM_PROTOCOL/LLM_HOST/LLM_PORT` 会拼出 `LLM_LINK = <scheme>://<host>:<port>/v1`。例：示例仓库 `https://example.com:10001/v1`。
 
@@ -174,38 +174,38 @@ just eval             # 全量 100 条, 报告默认写到 <DATA_ROOT>/eval/repo
 just eval 20          # 仅跑前 20 条
 ```
 
-仓库已补充 `report/report.json` 作为 100 条问答样本的评测结果，可直接对应课程提交要求。
+仓库已补充 `examples/report.json` 作为 100 条问答样本的评测结果，可直接对应课程提交要求。
 
 报告 JSON 与课程需求模板一致, 字段对应:
 
-| 需求字段 | 报告字段 |
-| --- | --- |
-| `question` | `question` |
-| `expected_answer` | `expected_answer` |
-| `model_output` | `model_output` |
-| `evaluation_note` | `evaluation_note` |
-| (额外) | `success` (`LLMJudge` 通过标记), `error_message` (若失败) |
+| 需求字段          | 报告字段                                                  |
+| ----------------- | --------------------------------------------------------- |
+| `question`        | `question`                                                |
+| `expected_answer` | `expected_answer`                                         |
+| `model_output`    | `model_output`                                            |
+| `evaluation_note` | `evaluation_note`                                         |
+| (额外)            | `success` (`LLMJudge` 通过标记), `error_message` (若失败) |
 
 ## 🛠️ 顶层命令一览 (justfile)
 
-| 命令 | 作用 |
-| --- | --- |
-| `just setup` | initdb → spider-crawl → spider-download → pageindex-import → pageindex-embed → build-ui |
-| `just web` | 启动 FastAPI (uvicorn 5 workers) |
-| `just initdb` / `db-reset` / `db-clean` | 数据库初始化/重置/清空 |
-| `just spider-crawl CATEGORY=all` | 抓取 NPC 法规索引 |
-| `just spider-download` | 下载 + 解析 docx |
-| `just pageindex-convert [FILTER]` | raw → structured (无需重新下载) |
-| `just pageindex-import` | structured → law_nodes |
-| `just pageindex-embed [LAW]` | law_nodes → documents |
-| `just search QUERY [LIMIT=5]` | 走混合检索 CLI |
-| `just eval [LIMIT]` | 跑内置 100 条法律问答评测 |
-| `just ui` | 前端开发 |
-| `just build-ui` | 前端 build + 拷贝到 `static/` |
-| `just backend-format\|lint\|typecheck` | Python 格式化/lint/类型检查 |
-| `just frontend-check\|typecheck` | 前端格式化+lint/biome/类型检查 |
-| `just docker` / `just database` / `just docker-down` | 容器编排 |
-| `just web-docker` | 仅起 web 容器 |
+| 命令                                                 | 作用                                                                                    |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `just setup`                                         | initdb → spider-crawl → spider-download → pageindex-import → pageindex-embed → build-ui |
+| `just web`                                           | 启动 FastAPI (uvicorn 5 workers)                                                        |
+| `just initdb` / `db-reset` / `db-clean`              | 数据库初始化/重置/清空                                                                  |
+| `just spider-crawl CATEGORY=all`                     | 抓取 NPC 法规索引                                                                       |
+| `just spider-download`                               | 下载 + 解析 docx                                                                        |
+| `just pageindex-convert [FILTER]`                    | raw → structured (无需重新下载)                                                         |
+| `just pageindex-import`                              | structured → law_nodes                                                                  |
+| `just pageindex-embed [LAW]`                         | law_nodes → documents                                                                   |
+| `just search QUERY [LIMIT=5]`                        | 走混合检索 CLI                                                                          |
+| `just eval [LIMIT]`                                  | 跑内置 100 条法律问答评测                                                               |
+| `just ui`                                            | 前端开发                                                                                |
+| `just build-ui`                                      | 前端 build + 拷贝到 `static/`                                                           |
+| `just backend-format\|lint\|typecheck`               | Python 格式化/lint/类型检查                                                             |
+| `just frontend-check\|typecheck`                     | 前端格式化+lint/biome/类型检查                                                          |
+| `just docker` / `just database` / `just docker-down` | 容器编排                                                                                |
+| `just web-docker`                                    | 仅起 web 容器                                                                           |
 
 ## 🧱 架构示意
 
@@ -286,7 +286,7 @@ data/
 ├── structured_laws/<law_name>.json         # parse_multi_level 序列化结果 (pageindex import 输入)
 └── eval/report.json                        # 每次 `just eval` 默认输出
 
-report/
+examples/
 └── report.json                             # 已提交的 100 条问答评测结果
 ```
 
@@ -296,13 +296,13 @@ report/
 
 ## 📝 需求对应表
 
-| 需求条目 | 本仓库位置 |
-| --- | --- |
-| 学习并部署本地 LLM | `backend/lawrag/chat/chat_model.py` (`VLLMChatModel`/`VLLMProvider`) + `llmserver` 作为 `VLLM` 模型服务端 |
-| 编写爬虫, 爬取法律法规 | `backend/lawrag/spider/` (law_spider / content_spider / runner) |
-| 文档清洗、分段, 向量化 | `backend/lawrag/documents/` (splitter / embedder / tokenizer) |
-| 构建 RAG 问答系统 | `backend/lawrag/database/ragmode.py` (向量+BM25 RRF+rerrank) |
-| 引入 Agentic Framework | `backend/lawrag/chat/` (pydantic-ai Agent + 4 Capability + 2 Subagent) |
-| FastAPI 演示界面 | `backend/lawrag/routers/` + `frontend/` (由 FastAPI `/webui/*` 挂载) |
-| 项目技术文档 | 本 README + `backend/AGENTS.md` + `frontend/AGENTS.md` |
-| **≥ 100 条测试样本** | `backend/lawrag/eval/dataset.py` 内置 100 条, 用 `just eval` 跑评估, 已提交结果见 `report/report.json` |
+| 需求条目               | 本仓库位置                                                                                                |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| 学习并部署本地 LLM     | `backend/lawrag/chat/chat_model.py` (`VLLMChatModel`/`VLLMProvider`) + `llmserver` 作为 `VLLM` 模型服务端 |
+| 编写爬虫, 爬取法律法规 | `backend/lawrag/spider/` (law_spider / content_spider / runner)                                           |
+| 文档清洗、分段, 向量化 | `backend/lawrag/documents/` (splitter / embedder / tokenizer)                                             |
+| 构建 RAG 问答系统      | `backend/lawrag/database/ragmode.py` (向量+BM25 RRF+rerrank)                                              |
+| 引入 Agentic Framework | `backend/lawrag/chat/` (pydantic-ai Agent + 4 Capability + 2 Subagent)                                    |
+| FastAPI 演示界面       | `backend/lawrag/routers/` + `frontend/` (由 FastAPI `/webui/*` 挂载)                                      |
+| 项目技术文档           | 本 README + `backend/AGENTS.md` + `frontend/AGENTS.md`                                                    |
+| **≥ 100 条测试样本**   | `backend/lawrag/eval/dataset.py` 内置 100 条, 用 `just eval` 跑评估, 已提交结果见 `examples/report.json`  |

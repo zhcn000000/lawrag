@@ -1,16 +1,3 @@
-"""Law spider - crawl national laws from 国家法律法规数据库 (flk.npc.gov.cn).
-
-Categories (available individually or via -a category=all):
-  - xf:    宪法 (constitution)
-  - flfg:  法律 (laws by NPC and its Standing Committee)
-  - xzfg:  行政法规 (administrative regulations by State Council)
-  - jcfg:  监察法规 (supervision regulations)
-  - sfjs:  司法解释 (judicial interpretations by Supreme Court)
-
-Available individually only (excluded from "all"):
-  - dfxfg: 地方性法规 (local regulations)
-"""
-
 import json
 import logging
 from collections.abc import AsyncIterator, Generator
@@ -23,6 +10,18 @@ from lawrag.spider.items import LawIndexItem
 
 logger = logging.getLogger(__name__)
 
+"""Law spider - crawl national laws from 国家法律法规数据库 (flk.npc.gov.cn).
+
+Categories (available individually or via -a category=all):
+  - xf:    宪法 (constitution)
+  - flfg:  法律 (laws by NPC and its Standing Committee)
+  - xzfg:  行政法规 (administrative regulations by State Council)
+  - jcfg:  监察法规 (supervision regulations)
+  - sfjs:  司法解释 (judicial interpretations by Supreme Court)
+
+Available individually only (excluded from "all"):
+  - dfxfg: 地方性法规 (local regulations)
+"""
 SEARCH_API_URL = "https://flk.npc.gov.cn/law-search/search/list"
 DETAIL_BASE_URL = "https://flk.npc.gov.cn"
 

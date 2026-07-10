@@ -53,8 +53,10 @@ lawrag/
 │   ├── downloaded_laws/*.docx     # 原始 docx
 │   ├── raw_laws/*.txt            # markitdown 转出的纯文本
 │   └── structured_laws/*.json     # parse_multi_level 输出的层级结构
-├── examples/                 # 已提交的评测结果
-│   └── report.json         # 100 条问答样本的 Agent 输出与 LLMJudge 评价
+├── examples/               # 一些例子
+|   ├── case.json           # 100 条问答样本的 Case 的设置
+│   ├── report.json         # 100 条问答样本的 Case 的 Agent 输出与评价
+│   └── laws.tar.gz         # 爬虫抓取的法律法规 json 压缩包，仅包含法律和宪法类别，解压到 data/structured_laws/ 即可直接使用
 ├── static/                 # `just build-ui` 把 frontend/dist 拷贝到这里, 由 FastAPI /webui/* 挂载
 ├── .proj_root              # 环境变量自动向上查找的仓库根标记
 ├── .env                    # POSTGRES_* / LLM_* 等环境变量

@@ -12,17 +12,15 @@ async def task(text: str) -> str:
 
 
 async def evaluate(cases: list[LawRagCase], max_cases: int | None = None) -> list[LawRagCaseReport | LawRagCaseFailure]:
-    if cases is not None:
-        dataset_cases = [
-            Case(
-                name=case.name,
-                inputs=case.question,
-                expected_output=case.expected_answer,
-            )
-            for case in cases
-        ]
-    else:
-        dataset_cases = None
+    dataset_cases = [
+        Case(
+            name=case.name,
+            inputs=case.question,
+            expected_output=case.expected_answer,
+        )
+        for case in cases
+    ]
+
     dataset = get_dataset(cases=dataset_cases, max_cases=max_cases)
     results = await dataset.evaluate(task=task)
     reports: list[LawRagCaseReport | LawRagCaseFailure] = []

@@ -52,7 +52,7 @@ backend/
 │   │   ├── tables.py          # SQLModel 表: User, SessionTable, HistoryTable, LawNode, DocumentTable
 │   │   ├── initdb.py          # 创建扩展 (pgcrypto/vchord/vchord_bm25) + 默认 admin 账号
 │   │   ├── pageindex.py       # LawPageIndex: 法律结构树 (law/preamble/part/subpart/chapter/section/article) 导入与查询
-│   │   ├── ragmode.py         # RAGMode: 向量+BM25 混合检索 (RRF) + rerank + 多级 page index 面包屑
+│   │   ├── ragsearch.py         # RAGSearch: 向量+BM25 混合检索 (RRF) + rerank + 多级 page index 面包屑
 │   │   ├── document.py        # DocumentStore: 分块 → 嵌入 → 写 documents 表
 │   │   ├── history.py         # HistoryStore: 会话 + pydantic-ai ModelMessage 持久化
 │   │   └── user.py            # UserManager: JWT 签发/校验 + 用户 CRUD
@@ -112,7 +112,7 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 顶层：
 
 - `start` — uvicorn 启动 FastAPI（5 workers，HTTPS 可选，加载 `.env` 解析 `SSL_KEY_PATH`/`SSL_CERT_PATH`）。
-- `search <query> [-k N]` — 走 `RAGMode.ahyprid_search` 的混合检索，结果用 rich 表格展示 score/title/content。
+- `search <query> [-k N]` — 走 `RAGSearch.ahyprid_search` 的混合检索，结果用 rich 表格展示 score/title/content。
 
 `database init|reset|clean [-d DB]` — 创建/重置/删除数据库。
 

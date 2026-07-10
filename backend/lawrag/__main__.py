@@ -15,7 +15,7 @@ from typer import Argument, Option, Typer
 
 from lawrag.database.initdb import clean_db, init_db, reset_db
 from lawrag.database.pageindex import LawPageIndex, TocEntryDict
-from lawrag.database.ragmode import RAGMode
+from lawrag.database.ragsearch import RAGSearch
 from lawrag.documents.lawparser import has_parsed_content, parse_multi_level
 from lawrag.environments import find_project_directory, settings
 from lawrag.eval.dataset import LawRagCase, LawRagCaseFailure, LawRagCaseReport
@@ -87,7 +87,7 @@ async def pageindex_search(
     limit: Annotated[int, Option("--limit", "-k", help="Number of results")] = 5,
     vecweight: Annotated[float, Option("--vector-weight", "-v", help="Vector search weight")] = 0.6,
 ) -> None:
-    rag = RAGMode()
+    rag = RAGSearch()
     docs = await rag.ahyprid_search(
         query=query,
         limit=limit,

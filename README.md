@@ -223,7 +223,7 @@ flowchart TB
         Webui["/webui/* 静态挂载<br/>(static/)"]
         Users["/api/users<br/>UserManager (JWT + pgcrypt)"]
         Chat["/api/chat<br/>HistoryStore (pydantic-ai ModelMessage)"]
-        Rag["/api/rag<br/>RAGMode (RRF + rerank + page index)"]
+        Rag["/api/rag<br/>RAGSearch (RRF + rerank + page index)"]
         Agent["pydantic-ai Agent<br/>+ 4 Capability (RAG / Code / Web / Subagent)"]
         ChatClient["VLLMChat<br/>(chat_model.py, qwen3.5, no fallback)"]
         EmbedClient["embedder.py<br/>(qwen3-embedding + qwen3-reranker)"]
@@ -304,7 +304,7 @@ examples/
 | 学习并部署本地 LLM     | `backend/lawrag/chat/chat_model.py` (`VLLMChatModel`/`VLLMProvider`) + `llmserver` 作为 `VLLM` 模型服务端 |
 | 编写爬虫, 爬取法律法规 | `backend/lawrag/spider/` (law_spider / content_spider / runner)                                           |
 | 文档清洗、分段, 向量化 | `backend/lawrag/documents/` (splitter / embedder / tokenizer)                                             |
-| 构建 RAG 问答系统      | `backend/lawrag/database/ragmode.py` (向量+BM25 RRF+rerrank)                                              |
+| 构建 RAG 问答系统      | `backend/lawrag/database/ragsearch.py` (向量+BM25 RRF+rerrank)                                              |
 | 引入 Agentic Framework | `backend/lawrag/chat/` (pydantic-ai Agent + 4 Capability + 2 Subagent)                                    |
 | FastAPI 演示界面       | `backend/lawrag/routers/` + `frontend/` (由 FastAPI `/webui/*` 挂载)                                      |
 | 项目技术文档           | 本 README + `backend/README.md` + `frontend/README.md` + `llmserver/README.md`                            |

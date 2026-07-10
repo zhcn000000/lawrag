@@ -13,7 +13,7 @@ from lawrag.database.pageindex import (
     NodeByPathDict,
     TocEntryDict,
 )
-from lawrag.database.ragmode import RAGMode
+from lawrag.database.ragsearch import RAGSearch
 
 from .struct import ModelDeps
 
@@ -50,7 +50,7 @@ path 不是中文标题，而是数据库物化路径
 """,
 )
 
-rag_mode = RAGMode()
+rag_mode = RAGSearch()
 page_index = LawPageIndex()
 
 

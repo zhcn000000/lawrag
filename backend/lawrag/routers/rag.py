@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from pydantic import TypeAdapter
 
 from lawrag.database.pageindex import LawPageIndex
-from lawrag.database.ragmode import RAGMode
+from lawrag.database.ragsearch import RAGSearch
 from lawrag.routers.schema import LawInfoItem, PageIndexImportResultItem, SearchItem, TocEntryItem
 
 from .schema import (
@@ -28,7 +28,7 @@ router = APIRouter()
 @router.post("/search")
 async def api_search(request: SearchRequest) -> SearchResponse:
     try:
-        rag_mode = RAGMode()
+        rag_mode = RAGSearch()
         docs = await rag_mode.ahyprid_search(
             query=request.query,
             limit=request.k,

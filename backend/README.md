@@ -51,7 +51,7 @@ backend/
 │   │   ├── tables.py          # SQLModel 表: User, SessionTable, HistoryTable, LawNode, DocumentTable
 │   │   ├── initdb.py          # 创建扩展 (pgcrypto/vchord/vchord_bm25) + 默认 admin 账号
 │   │   ├── pageindex.py       # LawPageIndex: 法律结构树导入与查询
-│   │   ├── ragmode.py         # RAGMode: 向量+BM25 混合检索 (RRF) + rerank + 多级 page index 面包屑
+│   │   ├── ragsearch.py         # RAGSearch: 向量+BM25 混合检索 (RRF) + rerank + 多级 page index 面包屑
 │   │   ├── document.py        # DocumentStore: 分块 → 嵌入 → 写 documents 表
 │   │   ├── history.py         # HistoryStore: 会话 + pydantic-ai ModelMessage 持久化
 │   │   └── user.py            # UserManager: JWT 签发/校验 + 用户 CRUD
@@ -109,7 +109,7 @@ uv run pytest -m "db"                  # 仅运行数据库测试
 CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 
 - `start` — uvicorn 启动 FastAPI（5 workers，可选 HTTPS，解析 `SSL_KEY_PATH`/`SSL_CERT_PATH`）。
-- `search <query> [-k N]` — 走 `RAGMode.ahyprid_search` 的混合检索，rich 表格展示 score/title/content。
+- `search <query> [-k N]` — 走 `RAGSearch.ahyprid_search` 的混合检索，rich 表格展示 score/title/content。
 - `database init|reset|clean [-d DB]` — 创建/重置/删除数据库。`init` 安装扩展 `pgcrypto`、`vchord`、`vchord_bm25`，创建默认账号 `admin/admin`。
 - `spider crawl` — NPC 索引爬虫。`-c` 分类：`xf`(宪法) / `flfg`(法律) / `xzfg`(行政法规) / `jcfg`(监察法规) / `sfjs`(司法解释) / `dfxfg`(地方性法规) / `all`（不含 dfxfg）；`-o` 输出路径，默认 `<DATA_ROOT>/law_index/law_index.json`。
 - `spider download [INDEX_PATH]` — 下载 + 解析：签名 URL → 下载 docx → markitdown → `parse_multi_level` → `json.dumps`。`-o` 结构化输出目录、`-d` 原始 docx 目录、`-c` 分类过滤。

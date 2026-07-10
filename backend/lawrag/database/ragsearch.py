@@ -48,7 +48,7 @@ def _node_breadcrumb(node: LawNode, node_map: dict[UUID, LawNode]) -> str:
     return " > ".join(reversed(labels))
 
 
-class RAGMode:
+class RAGSearch:
     def __init__(self, dbname: str | None = None) -> None:
         self.__db = DatabaseManager(dbname)
 

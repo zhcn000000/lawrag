@@ -64,10 +64,11 @@ lawrag/
 └── 法律Agent需求.md         # 课程实习原始需求
 ```
 
-详细目录与模块说明见:
+各子模块的详细目录与模块说明见:
 
-- [backend/AGENTS.md](backend/AGENTS.md)
-- [frontend/AGENTS.md](frontend/AGENTS.md)
+- [backend/README.md](backend/README.md) — FastAPI + pydantic-ai 法律 RAG 后端
+- [frontend/README.md](frontend/README.md) — Vite + React 19 前端
+- [llmserver/README.md](llmserver/README.md) — vLLM 多模型 OpenAI 兼容后端
 
 ## 🧰 技术栈
 
@@ -294,7 +295,7 @@ examples/
 
 ## 🔐 配置参考
 
-见 [backend/AGENTS.md#配置](backend/AGENTS.md)。`EnvironmentSettings` (`backend/lawrag/environments.py`) 自动沿父目录向上查找 `.proj_root` 标记并加载 `<repo>/.env`; 未找到则退到 `backend/.venv`。
+见 [backend/README.md#配置](backend/README.md)。`EnvironmentSettings` (`backend/lawrag/environments.py`) 自动沿父目录向上查找 `.proj_root` 标记并加载 `<repo>/.env`; 未找到则退到 `backend/.venv`。
 
 ## 📝 需求对应表
 
@@ -306,5 +307,5 @@ examples/
 | 构建 RAG 问答系统      | `backend/lawrag/database/ragmode.py` (向量+BM25 RRF+rerrank)                                              |
 | 引入 Agentic Framework | `backend/lawrag/chat/` (pydantic-ai Agent + 4 Capability + 2 Subagent)                                    |
 | FastAPI 演示界面       | `backend/lawrag/routers/` + `frontend/` (由 FastAPI `/webui/*` 挂载)                                      |
-| 项目技术文档           | 本 README + `backend/AGENTS.md` + `frontend/AGENTS.md`                                                    |
+| 项目技术文档           | 本 README + `backend/README.md` + `frontend/README.md` + `llmserver/README.md`                            |
 | **≥ 100 条测试样本**   | `backend/lawrag/eval/dataset.py` 内置 100 条, 用 `just eval` 跑评估, 已提交结果见 `examples/report.json`  |

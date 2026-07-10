@@ -85,12 +85,4 @@ uv run pytest
 - 不要把密钥、token、真实账号密码写入代码、日志、文档或测试数据。
 - 不要修改 `data/` 和 `report/` 中的产物，除非任务明确要求更新数据或评测结果。
 - 修改项目结构、启动方式、环境变量或评测路径时，同步更新 README 和相关 `AGENTS.md`。
-- 运行会加载大模型或长时间占用 GPU 的命令前，先确认任务确实需要。
 
-## 验证建议
-
-- 文档-only 修改至少运行 `git diff --check`。
-- 后端逻辑修改运行 `just backend-format && just backend-lint && just backend-typecheck`，必要时运行 `cd backend && uv run pytest -m "not db"`。
-- 前端修改运行 `just frontend-check && just frontend-typecheck`。
-- llmserver 修改运行其本目录 ruff、ty、pytest；涉及模型加载时再按需启动服务验证 `/v1/health` 与 `/v1/models`。
-- RAG、评测或数据集修改后，按任务规模运行 `just eval [LIMIT]`，默认报告写入 `<DATA_ROOT>/eval/report.json`。

@@ -17,13 +17,7 @@ SubagentName = Literal["explore_agent", "general_agent"]
 TOOLSET_NAME_BY_OBJECT: dict[int, str] = {}
 
 
-async def prepare_subagent(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> ToolDefinition | None:
-    if "subagent_toolkit" in ctx.deps.select_toolset:
-        return tool_def
-    return None
-
-
-def map_toolset_name(tools: list[str]) -> list[Capability[ModelDeps]]:
+def _map_toolset_name(tools: list[str]) -> list[Capability[ModelDeps]]:
     toolset_map = {
         "rag_toolkit": rag_capability,
         "code_toolkit": code_capability,
@@ -34,21 +28,29 @@ def map_toolset_name(tools: list[str]) -> list[Capability[ModelDeps]]:
 
 
 @lru_cache(maxsize=len(SUBAGENT_REGISTRY))
-def get_subagent(name: str) -> Agent[ModelDeps, str]:
+def _get_subagent(name: str) -> Agent[ModelDeps, str]:
     spec = SUBAGENT_REGISTRY.get(name)
     if spec is None:
         raise ValueError(f"未知的subagent名称: {name}")
     return Agent(
         deps_type=ModelDeps,
         output_type=str,
-        capabilities=map_toolset_name(spec.toolkits),
+        capabilities=_map_toolset_name(spec.toolkits),
         instructions=spec.instructions,
         retries=5,
     )
 
 
+async def prepare_subagent(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> ToolDefinition | None:
+    if "subagent_toolkit" in ctx.deps.select_toolset:
+        return tool_def
+    return None
+
+
 @subagent_capability.instructions
-def agent_instructions() -> str:
+def agent_instructions(ctx: RunContext[ModelDeps]) -> str | None:
+    if "subagent_toolkit" not in ctx.deps.select_toolset:
+        return None
     text = """当前已经启用了subagent功能，你可以选择调用以下子Agent来执行任务，
 除了以下两类排除，子agent可以使用其他所有工具
 - 子agent同样无法使用未被用户选中的工具，例如如果你的工具列表中没有code_tools，则子agent也无法访问这个工具，
@@ -74,7 +76,7 @@ async def subagent(
     if agent_name not in SUBAGENT_REGISTRY:
         raise ModelRetry(f"未知的agent名称: {agent_name}，可用agent: {list(SUBAGENT_REGISTRY.keys())}")
 
-    agent = get_subagent(agent_name)
+    agent = _get_subagent(agent_name)
 
     result = await agent.run(
         user_prompt=task_text,

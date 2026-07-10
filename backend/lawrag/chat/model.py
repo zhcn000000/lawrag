@@ -20,7 +20,14 @@ agent: Agent[ModelDeps, str] = Agent(
     output_type=str,
     capabilities=[rag_capability, code_capability, web_capability, subagent_capability],
     retries=5,
-    instructions="""你是一名专业的中国法律顾问AI助手。
+)
+
+
+@agent.instructions
+async def metadata_prompt(ctx: RunContext[ModelDeps]):
+    time = datetime.now(UTC).isoformat()
+    model_name = ctx.model.model_name
+    prompt = """你是一名专业的中国法律顾问AI助手。
 请优先使用中文输出和<think>思考</think>，除非用户使用其他语言输入或明确要求使用其他语言。
 
 你可以：
@@ -32,25 +39,22 @@ agent: Agent[ModelDeps, str] = Agent(
 markdown格式渲染中支持Mermaid和Infographic图表扩展，可以在需要的地方使用mermaid语法绘制法律流程图、法律程序关系图等。
 
 如果要引用外部图片、视频、音频等的链接需要使用对应的html标签来渲染，并且需要保证链接的有效性和安全性。
-""",
-)
-
-
-@agent.instructions
-async def metadata_prompt(ctx: RunContext[ModelDeps]):
-    time = datetime.now(UTC).isoformat()
-    model_name = ctx.model.model_name
-
-    prompt = f"""
+"""
+    prompt += f"""\n
 你是模型：{model_name}
 当前时间是(UTC)：{time}
-你可能具有以下工具组合: \n"""
+用户可选以下工具集: \n"""
 
     for tool_name, tool_info in TOOL_REGISTRY.items():
         prompt += f"- {tool_name}: {tool_info.label} - {tool_info.description}\n"
 
-    prompt += "用户可以选择勾选你能使用的工具组合，你只能使用用户勾选的工具组合来完成任务。\n"
-
+    prompt += """用户可以选择勾选你能使用的工具集，你只能使用用户勾选的工具集来完成任务。
+工具集不是具体的某个工具名称，而是一系列工具组成的集合，例如rag_toolkit工具集包含了list_laws、search_documents等工具。"""
+    if ctx.deps.select_toolset:
+        prompt += """你当前可以使用以下工具集:"""
+        prompt += ",".join(ctx.deps.select_toolset)
+    else:
+        prompt += """你当前没有可用的工具集。"""
     return prompt
 
 

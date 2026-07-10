@@ -19,8 +19,23 @@ from .struct import ModelDeps
 
 logger = getLogger(__name__)
 
-rag_capability: Capability[ModelDeps] = Capability(
-    instructions="""这是一个 RAG 工具集, 用于查询已导入的法律文档库 (法律法规、司法解释等) 的内容, 使用流程如下:
+rag_capability: Capability[ModelDeps] = Capability()
+
+rag_mode = RAGSearch()
+page_index = LawPageIndex()
+
+
+async def prepare_rag(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> ToolDefinition | None:
+    if "rag_toolkit" in ctx.deps.select_toolset:
+        return tool_def
+    return None
+
+
+@rag_capability.instructions
+def rag_instructions(ctx: RunContext[ModelDeps]) -> str | None:
+    if "rag_toolkit" not in ctx.deps.select_toolset:
+        return None
+    text = """当前已经启用rag工具集功能, 用于查询已导入的法律文档库 (法律法规、司法解释等) 的内容, 使用流程如下:
 
 1. 探查法律范围: 不确定有哪些法律时, 先调用
    list_laws(regex?, limit, offset) 列出已导入法律的名称与法条数量, 可用 regex 过滤。
@@ -47,17 +62,8 @@ path 不是中文标题，而是数据库物化路径
 或 search_documents 等工具返回结果中的 `path` 值传入, 也可以自行构造
 - `law_name` 必须与 list_laws 或者其他工具返回的法律名称的完全一致。
 - 所有工具返回结构化的 dict/list 数据，可被代码沙箱中的 Python 代码直接处理。
-""",
-)
-
-rag_mode = RAGSearch()
-page_index = LawPageIndex()
-
-
-async def prepare_rag(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> ToolDefinition | None:
-    if "rag_toolkit" in ctx.deps.select_toolset:
-        return tool_def
-    return None
+"""
+    return text
 
 
 @rag_capability.tool(

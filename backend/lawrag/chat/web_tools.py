@@ -20,6 +20,15 @@ async def prepare_web(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> T
     return None
 
 
+@web_capability.instructions
+def web_instructions(ctx: RunContext[ModelDeps]) -> str | None:
+    if "web_toolkit" not in ctx.deps.select_toolset:
+        return None
+    text = """当前已经启用了网络搜索功能，你可以使用search_web工具来进行网络搜索，或者使用fetch_web工具来获取网页内容。
+在rag工具集也被开启的情况下，优先使用rag工具集来搜索法律法规、司法解释等内容，只有在rag工具集无法满足需求时，才使用网络搜索功能。"""
+    return text
+
+
 @cache
 def _get_exa() -> AsyncExa:
     return AsyncExa()

@@ -24,13 +24,23 @@ async def prepare_code(ctx: RunContext[ModelDeps], tool_def: ToolDefinition) -> 
     return None
 
 
+@code_capability.instructions
+def code_instructions(ctx: RunContext[ModelDeps]) -> str | None:
+    if "code_toolkit" not in ctx.deps.select_toolset:
+        return None
+    text = """当前已经启用了代码执行功能，你可以使用python_repl工具来执行Python代码。
+你可以在Python代码中调用其他工具，例如await list_laws()，
+来获取法律法规列表，或者await search_documents(query='关键词')来搜索文档。
+函数返回值为工具的返回结果，所有工具函数都是异步的，
+调用时必须使用 `await`，如 `result = await search_documents(query='关键词')`。
+所有工具函数都是异步的，调用时必须使用 `await`，如 `result = await search_documents(query='关键词')`。"""
+    return text
+
+
 @code_capability.tool(
     name="python_repl",
     description="""这是一个可以执行Python代码的工具，输入Python代码并返回最后一条表达式的结果和控制台输出。
-为了沙盒的安全性，以及沙盒的局限性，该工具不支持部分标准库和所有第三方库的使用，且不支持网络请求。
-沙箱中可以直接调用当前可用的Agent工具作为函数，函数名和参数名称与普通工具调用完全一致，
-如await list_laws() 函数返回值为工具的返回值
-所有工具函数都是异步的，调用时必须使用 `await`，如 `result = await search_documents(query='关键词')`。""",
+为了沙盒的安全性，以及沙盒的局限性，该工具不支持部分标准库和所有第三方库的使用，且不支持网络请求。""",
     prepare=prepare_code,
     include_return_schema=True,
 )

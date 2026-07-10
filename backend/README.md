@@ -16,7 +16,7 @@ Python 3.14 后端，基于 FastAPI + pydantic-ai 的法律法规 RAG 问答系�
 - **代码沙盒**: pydantic-monty（受限 Python REPL）
 - **Web 搜索**: exa-py（`search_web`）+ httpx + BeautifulSoup（`fetch_web`）
 - **鉴权**: pyjwt (HS256) + PostgreSQL `crypt()/gen_salt('bf')` 存密码哈希
-- **评估**: pydantic-evals + LLMJudge（样本从 `examples/testset.json` 读取，默认 100 条）
+- **评估**: pydantic-evals + LLMJudge（样本从 `examples/case.json` 读取，默认 100 条）
 - **前端资源**: FastAPI 把仓库根 `static/`（`just build-ui` 产出）挂载到 `/webui/*`
 
 ## 项目结构
@@ -40,7 +40,7 @@ backend/
 │   │   ├── code_tools.py      # code_toolset: python_repl (pydantic-monty)
 │   │   ├── web_tools.py       # web_toolset: search_web (exa) / fetch_web (httpx + bs4)
 │   │   └── subagent_tools.py  # subagent_toolset: 调度 explore_agent / general_agent
-│   ├── eval/                  # 评测：pydantic-evals + LLMJudge，样本从 examples/testset.json 读取
+│   ├── eval/                  # 评测：pydantic-evals + LLMJudge，样本从 examples/case.json 读取
 │   │   ├── dataset.py         #   get_dataset + evaluators + LawRagCase/Report 数据模型
 │   │   └── eval.py            #   evaluate(): 跑 Agent + LLMJudge，返回 LawRagCaseReport 列表
 │   ├── database/
@@ -116,7 +116,7 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 - `pageindex convert [-r RAW_DIR] [-o OUTPUT_DIR] [-f FILTER]` — 从 `raw_laws/*.txt` 重新解析生成 `structured_laws/*.json`（无需重新下载）。
 - `pageindex import [PATH] [-c CATEGORY]` — 把 `structured_laws/*.json` 导入 `law_nodes`；`(law_name, path)` 唯一键保证幂等。
 - `pageindex list|show|toc|search|embed` — 法条浏览/查询/嵌入：`embed` 走 `LawPageIndex.aembed_law_articles` → `DocumentStore.abatch_load_from_texts`。
-- `eval run [-i INPUT] [-n MAX_CASES] [-o OUTPUT]` — 从测试集（`-i`，默认仓库根 `examples/testset.json`）读取问答样本，用 Agent 生成答案并与标准答案对比，LLMJudge 打分，结果写入 `<DATA_ROOT>/eval/report.json`。
+- `eval run [-i INPUT] [-n MAX_CASES] [-o OUTPUT]` — 从测试集（`-i`，默认仓库根 `examples/case.json`）读取问答样本，用 Agent 生成答案并与标准答案对比，LLMJudge 打分，结果写入 `<DATA_ROOT>/eval/report.json`。
 
 仓库根 `justfile` 一键命令：`just web` / `just initdb` / `just eval` / `just backend-format|lint|typecheck` 等。
 
@@ -124,22 +124,22 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 
 通过 `<repo>/.env` 加载（`environments.py` 自动向上查找 `.proj_root`）；环境变量别名用 `Annotated[..., Field(alias=...)]`：
 
-| 变量 | alias | 默认 |
-| --- | --- | --- |
-| `FASTAPI_HOST` / `FASTAPI_PORT` | – | `127.0.0.1` / `40001` |
-| `POSTGRES_HOST` / `POSTGRES_PORT` | – | `127.0.0.1` / `10004` |
-| `POSTGRES_USER` / `POSTGRES_DB` / `POSTGRES_PASSWORD` | – | `postgres` / `data` / `postgres_password` |
-| `POSTGRES_DSN` | – | 由上述字段派生 (`postgresql+psycopg://...`) |
-| `LAWRAG_DATA_ROOT` | `RAG_DATA_ROOT` | `<proj>/data` |
-| `LAWRAG_UUID_SEED` | `RAG_UUID_SEED` | 固定 UUID |
-| `RAG_RELEASE_MODE` | – | `True` |
-| `RAG_TMP_DIR` | – | `mkdtemp()` |
-| `RAG_TOKEN_EXPIRES_IN` | – | `21600`（秒，6 小时） |
-| `JWT_SECRET` | – | 默认值，生产必须改 |
-| `SSL_KEY_PATH` / `SSL_CERT_PATH` | – | 可选 HTTPS |
-| `LLM_PROTOCOL` / `LLM_HOST` / `LLM_PORT` | – | `http` / `127.0.0.1` / `40002`；拼成 `LLM_LINK = <scheme>://<host>:<port>/v1` |
-| `LLM_LINK` | – | computed，由上面三个变量派生，含尾随 `/v1` |
-| `USER_AGENT` | – | 默认 Chrome UA（覆盖爬虫反爬） |
+| 变量                                                  | alias           | 默认                                                                          |
+| ----------------------------------------------------- | --------------- | ----------------------------------------------------------------------------- |
+| `FASTAPI_HOST` / `FASTAPI_PORT`                       | –               | `127.0.0.1` / `40001`                                                         |
+| `POSTGRES_HOST` / `POSTGRES_PORT`                     | –               | `127.0.0.1` / `10004`                                                         |
+| `POSTGRES_USER` / `POSTGRES_DB` / `POSTGRES_PASSWORD` | –               | `postgres` / `data` / `postgres_password`                                     |
+| `POSTGRES_DSN`                                        | –               | 由上述字段派生 (`postgresql+psycopg://...`)                                   |
+| `LAWRAG_DATA_ROOT`                                    | `RAG_DATA_ROOT` | `<proj>/data`                                                                 |
+| `LAWRAG_UUID_SEED`                                    | `RAG_UUID_SEED` | 固定 UUID                                                                     |
+| `RAG_RELEASE_MODE`                                    | –               | `True`                                                                        |
+| `RAG_TMP_DIR`                                         | –               | `mkdtemp()`                                                                   |
+| `RAG_TOKEN_EXPIRES_IN`                                | –               | `21600`（秒，6 小时）                                                         |
+| `JWT_SECRET`                                          | –               | 默认值，生产必须改                                                            |
+| `SSL_KEY_PATH` / `SSL_CERT_PATH`                      | –               | 可选 HTTPS                                                                    |
+| `LLM_PROTOCOL` / `LLM_HOST` / `LLM_PORT`              | –               | `http` / `127.0.0.1` / `40002`；拼成 `LLM_LINK = <scheme>://<host>:<port>/v1` |
+| `LLM_LINK`                                            | –               | computed，由上面三个变量派生，含尾随 `/v1`                                    |
+| `USER_AGENT`                                          | –               | 默认 Chrome UA（覆盖爬虫反爬）                                                |
 
 `find_project_directory()` 沿父目录向上寻找 `.proj_root`，找到后 `os.chdir` 至该目录，确保数据库脚本与相对路径一致。
 

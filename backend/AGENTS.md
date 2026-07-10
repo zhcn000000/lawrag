@@ -17,7 +17,7 @@ Python 3.14 后端，基于 FastAPI + pydantic-ai 的法律 RAG 系统。
 - **代码沙盒**: pydantic-monty（受限 Python REPL，仅可用 sys/typing/asyncio）
 - **Web 搜索**: exa-py（`search_web`）+ httpx + BeautifulSoup（`fetch_web`）
 - **鉴权**: pyjwt (HS256) + PostgreSQL `crypt()/gen_salt('bf')` 存密码哈希
-- **评估**: pydantic-evals + LLMJudge（测试样本从 `examples/testset.json` 读取，默认 100 条）
+- **评估**: pydantic-evals + LLMJudge（测试样本从 `examples/case.json` 读取，默认 100 条）
 - **前端资源**: FastAPI 把仓库根 `static/`（由 `just build-ui` 产出）挂载到 `/webui/*`
 
 ## 项目结构
@@ -41,7 +41,7 @@ backend/
 │   │   ├── code_tools.py      # code_toolset: python_repl (pydantic-monty)
 │   │   ├── web_tools.py       # web_toolset: search_web (exa) / fetch_web (httpx + bs4)
 │   │   └── subagent_tools.py  # subagent_toolset: subagent 调度 explore_agent / general_agent
-│   ├── eval/                  # 评测：pydantic-evals + LLMJudge，样本从 examples/testset.json 读取
+│   ├── eval/                  # 评测：pydantic-evals + LLMJudge，样本从 examples/case.json 读取
 │   │   ├── dataset.py         #   get_dataset + evaluators + LawRagCase/Report 数据模型
 │   │   └── eval.py            #   evaluate(): 跑 Agent + LLMJudge，返回 LawRagCaseReport 列表
 │   ├── database/
@@ -142,7 +142,7 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 - `search <law_name> <query> [-l LIMIT]`（按 content ILIKE 过滤；**注意**：`__main__.pageindex_search` 是顶层命令，此处为局部 ILIKE 过滤，名称易混淆）
 - `embed [law_name] [-s CHUNK_SIZE] [-o CHUNK_OVERLAP] [-b BATCH_SIZE]`（走 `LawPageIndex.aembed_law_articles` → `DocumentStore.abatch_load_from_texts`）
 
-`eval run [-i INPUT] [-n MAX_CASES] [-o OUTPUT]` — 跑法律问答样本：从 JSON 测试集（`-i`，默认仓库根 `examples/testset.json`）读取问答样本，用 Agent 生成答案并与标准答案对比，由 LLMJudge 打分；结果以 rich 表格展示并以 JSON 写入 `<DATA_ROOT>/eval/report.json`。仓库根 `examples/report.json` 保留课程提交版完整结果。默认 100 条以《劳动合同法》为主的样本。
+`eval run [-i INPUT] [-n MAX_CASES] [-o OUTPUT]` — 跑法律问答样本：从 JSON 测试集（`-i`，默认仓库根 `examples/case.json`）读取问答样本，用 Agent 生成答案并与标准答案对比，由 LLMJudge 打分；结果以 rich 表格展示并以 JSON 写入 `<DATA_ROOT>/eval/report.json`。仓库根 `examples/report.json` 保留课程提交版完整结果。默认 100 条以《劳动合同法》为主的样本。
 
 仓库根目录 `justfile` 一键命令：`just web` / `just initdb` / `just eval` / `backend-format|lint|typecheck` 等（详见仓库根 `justfile`）。
 

@@ -327,7 +327,7 @@ async def eval_run(
 ) -> None:
     """运行法律问答测试集, 用 LLM 裁判评估 Agent 输出并生成报告。
 
-    从 JSON 测试集文件 (默认 ``examples/testset.json``) 读取问答样本, 逐条调用 Agent 生成回答,
+    从 JSON 测试集文件 (默认 ``examples/case.json``) 读取问答样本, 逐条调用 Agent 生成回答,
     与标准答案对比后由 LLM 裁判判定是否通过, 结果以 rich 表格展示并写入 JSON。
     """
     if output is None:

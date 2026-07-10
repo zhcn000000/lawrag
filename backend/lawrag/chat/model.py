@@ -74,7 +74,7 @@ def get_model_settings(
 ) -> ModelSettings:
     if thinking:
         return ModelSettings(
-            max_tokens=max_tokens or 262144,
+            max_tokens=max_tokens or 131072,
             temperature=temperature or 1.0,
             top_p=top_p or 0.95,
             presence_penalty=presence_penalty or 1.5,
@@ -87,7 +87,7 @@ def get_model_settings(
             else {"thinking": {"type": "enabled"}},
         )
     return ModelSettings(
-        max_tokens=max_tokens or 262144,
+        max_tokens=max_tokens or 131072,
         temperature=temperature or 0.7,
         top_p=top_p or 0.8,
         presence_penalty=presence_penalty or 1.5,

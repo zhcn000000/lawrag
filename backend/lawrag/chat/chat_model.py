@@ -66,6 +66,7 @@ def vllm_model_profile(model_name: str) -> ModelProfile:
         supports_json_object_output=True,
         supports_tool_return_schema=True,
         supports_thinking=True,
+        openai_chat_supports_multiple_system_messages=False,
         default_structured_output_mode="native",
         openai_chat_send_back_thinking_parts="field",
         openai_chat_thinking_field="reasoning",

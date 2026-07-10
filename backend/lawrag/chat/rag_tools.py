@@ -186,11 +186,13 @@ async def browse_law(
     law_name: Annotated[str, Field(description="法律名称, 例如'中华人民共和国民法典'")],
     path: Annotated[
         str | None,
-        Field(description="层级路径, 原样取自其它工具返回的 `path` 值 (如 'b2/c2/s1'); 留空浏览顶层"),
+        Field(description="层级路径, 原样取自其它工具返回的 `path` 值 (如 'b2/c2/s1'); 留空(null)浏览顶层"),
     ] = None,
     limit: Annotated[int, Field(description="返回条目数量上限")] = 200,
 ) -> Annotated[BrowseResultDict, Field(description="浏览结果 dict, 含 law_name/path/node_type/title/children")]:
     try:
+        if path is None or not path.strip():
+            path = "law0/"
         return await page_index.abrowse_law(law_name=law_name, path=path, limit=limit)
     except Exception as e:
         raise ModelRetry(f"浏览法律层级失败: {e!s}") from e

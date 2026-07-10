@@ -312,51 +312,31 @@ class LawPageIndex:
     async def abrowse_law(
         self,
         law_name: str,
-        path: str | None = None,
+        path: str,
         limit: int = 200,
     ) -> BrowseResultDict:
         if path is not None and not path.startswith("law0/"):
             path = path.removeprefix("/")
             path = f"law0/{path}"
         async with self.__db.asession() as session:
-            if path:
-                current = (
-                    (
-                        await session.execute(
-                            select(LawNode).where(
-                                col(LawNode.law_name) == law_name,
-                                col(LawNode.path) == path,
-                            ),
-                        )
+            current = (
+                (
+                    await session.execute(
+                        select(LawNode).where(
+                            col(LawNode.law_name) == law_name,
+                            col(LawNode.path) == path,
+                        ),
                     )
-                    .scalars()
-                    .first()
                 )
-                if current is None:
-                    raise ValueError(f"Node not found for law {law_name} and path {path}")
-                parent_id = current.id
-                cur_type = current.node_type
-                cur_title = current.content
-                cur_path = current.path
-            else:
-                root = (
-                    (
-                        await session.execute(
-                            select(LawNode).where(
-                                col(LawNode.law_name) == law_name,
-                                col(LawNode.node_type) == "law",
-                            ),
-                        )
-                    )
-                    .scalars()
-                    .first()
-                )
-                if root is None:
-                    raise ValueError(f"Law {law_name} not found")
-                parent_id = root.id
-                cur_type = "law"
-                cur_title = law_name
-                cur_path = ""
+                .scalars()
+                .first()
+            )
+            if current is None:
+                raise ValueError(f"Node not found for law {law_name} and path {path}")
+            parent_id = current.id
+            cur_type = current.node_type
+            cur_title = current.content
+            cur_path = current.path
 
             rows = (
                 (

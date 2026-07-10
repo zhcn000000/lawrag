@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from tempfile import mkdtemp
 from typing import Annotated, Literal
@@ -7,8 +6,6 @@ from uuid import UUID
 from dotenv import load_dotenv
 from pydantic import Field, HttpUrl, PostgresDsn, SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-os.environ.setdefault("USER_AGENT", "Chrome/139.0.2171.99 Safari/537.36")
 
 
 def find_project_directory() -> Path:

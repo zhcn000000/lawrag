@@ -80,7 +80,7 @@ lawrag/
 | Agent 框架 | pydantic-ai (Agent + Capability + Subagent) |
 | 系统界面 | FastAPI 0.119 (uvicorn 5 workers) + Vite 8 / React 19 / antd 6 / Emotion |
 
-> 默认部署把 chat 与 embedding/rerank 集中到同一个 OpenAI 兼容 vLLM 端点（即同一个 `LLM_LINK`），可直接使用仓库内 `llmserver/` 启动模型后端；`.env` 中的 `LLM_PROTOCOL/LLM_HOST/LLM_PORT` 会拼出 `LLM_LINK = <scheme>://<host>:<port>/v1`。例：示例仓库 `https://nw.lonwell.cn:10001/v1`。
+> 默认部署把 chat 与 embedding/rerank 集中到同一个 OpenAI 兼容 vLLM 端点（即同一个 `LLM_LINK`），可直接使用仓库内 `llmserver/` 启动模型后端；`.env` 中的 `LLM_PROTOCOL/LLM_HOST/LLM_PORT` 会拼出 `LLM_LINK = <scheme>://<host>:<port>/v1`。例：示例仓库 `https://example.com:10001/v1`。
 
 ## 🚀 快速开始
 

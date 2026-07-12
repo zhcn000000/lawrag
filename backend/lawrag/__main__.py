@@ -7,7 +7,6 @@ import uvicorn
 import uvloop
 from asyncer import runnify
 from pydantic import TypeAdapter
-from rich import print as rprint
 from rich import traceback
 from rich.logging import RichHandler
 from rich.table import Table
@@ -106,9 +105,9 @@ async def pageindex_search(
             name = doc.name or "Untitled"
             content = doc.content[:100].replace("\n", " ") + ("..." if len(doc.content) > 100 else "")
             table.add_row(score, name, content)
-        rprint(table)
+        print(table)
     else:
-        rprint("无搜索结果")
+        print("无搜索结果")
 
 
 @pageindex_cmd.command("import")
@@ -137,14 +136,14 @@ async def pageindex_list() -> None:
     pageindex = LawPageIndex()
     laws = await pageindex.alist_laws()
     if not laws:
-        rprint("暂无已导入的法律")
+        print("暂无已导入的法律")
         return
     table = Table(title="已导入法律列表", title_style="bold")
     table.add_column("法律名称", style="green")
     table.add_column("法条数量", style="cyan", justify="right")
     for law in laws:
         table.add_row(law["law_name"], str(law["article_count"]))
-    rprint(table)
+    print(table)
 
 
 @pageindex_cmd.command("show")
@@ -158,7 +157,7 @@ async def pageindex_show(
     pageindex = LawPageIndex()
     articles = await pageindex.aget_law_articles(law_name=law_name, start=start, end=end, limit=limit)
     if not articles:
-        rprint(f"未找到法律 '{law_name}' 的法条")
+        print(f"未找到法律 '{law_name}' 的法条")
         return
     table = Table(title=f"{law_name} 法条列表", title_style="bold")
     table.add_column("条号", style="cyan", width=8)
@@ -166,7 +165,7 @@ async def pageindex_show(
     for a in articles:
         content = a["content"][:120].replace("\n", " ") + ("..." if len(a["content"]) > 120 else "")
         table.add_row(f"第{a['article_number']}条", content)
-    rprint(table)
+    print(table)
 
 
 @pageindex_cmd.command("toc")
@@ -177,7 +176,7 @@ async def pageindex_toc(
     pageindex = LawPageIndex()
     toc = await pageindex.aget_law_toc(law_name=law_name)
     if not toc:
-        rprint(f"未找到法律 '{law_name}' 的章节目录")
+        print(f"未找到法律 '{law_name}' 的章节目录")
         return
     unit = {"part": "编", "subpart": "分编", "chapter": "章", "section": "节"}
     table = Table(title=f"{law_name} 目录", title_style="bold")
@@ -193,7 +192,7 @@ async def pageindex_toc(
             _walk(node.get("children") or [], depth + 1)
 
     _walk(toc, 0)
-    rprint(table)
+    print(table)
 
 
 @pageindex_cmd.command("embed")
@@ -212,9 +211,9 @@ async def pageindex_embed(
         chunk_overlap=chunk_overlap,
         batch_size=batch_size,
     )
-    rprint(f"嵌入完成: {result['law_name']}")
-    rprint(f"  法条数: {result['articles_embedded']}")
-    rprint(f"  分块数: {result['chunks_created']}")
+    print(f"嵌入完成: {result['law_name']}")
+    print(f"  法条数: {result['articles_embedded']}")
+    print(f"  分块数: {result['chunks_created']}")
 
 
 @pageindex_cmd.command("convert")
@@ -365,14 +364,14 @@ async def eval_run(
         note = note.strip().replace("\n", " ")
         note = note[:80] + ("..." if len(note) > 80 else "")
         table.add_row(mark, question, note)
-    rprint(table)
+    print(table)
 
     output.write_bytes(
         TypeAdapter(list[LawRagCaseReport | LawRagCaseFailure]).dump_json(reports, indent=2, ensure_ascii=False),
     )
     rate = passed / total if total else 0.0
-    rprint(f"通过率: {rate:.1%} ({passed}/{total})")
-    rprint(f"报告已写入: {output}")
+    print(f"通过率: {rate:.1%} ({passed}/{total})")
+    print(f"报告已写入: {output}")
 
 
 cmd.add_typer(spider_cmd, name="spider")

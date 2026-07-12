@@ -89,4 +89,4 @@ async def get_current_user(
     return UserResponse(id=user_info["id"], username=user_info["username"])
 
 
-__all__ = ["chat_router", "rag_router", "user_router"]
+__all__ = ["app", "chat_router", "rag_router", "user_router"]

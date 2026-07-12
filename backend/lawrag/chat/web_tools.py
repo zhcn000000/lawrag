@@ -1,12 +1,17 @@
+import ipaddress
+import re
+import socket
 from functools import cache
-from typing import Annotated, Literal, TypedDict
+from mimetypes import guess_type
+from typing import Annotated, TypedDict
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from exa_py import AsyncExa
 from exa_py.api import Category, SearchType
-from httpx2 import AsyncClient
+from httpx2 import AsyncClient, HTTPStatusError
 from pydantic import Field
-from pydantic_ai import ModelRetry, RunContext, ToolDefinition
+from pydantic_ai import BinaryContent, ModelRetry, RunContext, ToolDefinition
 from pydantic_ai.capabilities import Capability
 
 from .struct import ModelDeps
@@ -35,7 +40,7 @@ def _get_exa() -> AsyncExa:
 
 
 class SearchResult(TypedDict):
-    summery: str
+    summary: str
     text: str
 
 
@@ -67,7 +72,7 @@ async def search_web(
         for result in response.results:
             results.append(
                 SearchResult(
-                    summery=result.summary or "",
+                    summary=result.summary or "",
                     text=result.text or "",
                 ),
             )
@@ -79,23 +84,65 @@ async def search_web(
 
 @web_capability.tool(
     name="fetch_web",
-    description="获取网页原始内容工具，输入网页URL，返回网页的文本内容。",
+    description="获取网页原始内容工具，输入网页URL，返回网页的内容。",
     prepare=prepare_web,
     include_return_schema=True,
 )
 async def fetch_web(
     ctx: RunContext[ModelDeps],
     url: Annotated[str, Field(description="要获取内容的网页URL")],
-    format: Annotated[Literal["text", "html"], Field(description="内容格式，支持html和text两种格式")] = "text",
-) -> str:
+    content_type: Annotated[
+        str | None,
+        Field(
+            description="指定返回内容类型: text/html, application/json, text/plain, application/octet-stream等，"
+            "未指定则从链接url后缀或返回body的Content-Type中推断",
+        ),
+    ] = None,
+) -> str | BinaryContent:
     try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            raise ModelRetry("仅支持 http/https 协议的 URL")
+        if parsed.hostname:
+            try:
+                ip = ipaddress.ip_address(socket.gethostbyname(parsed.hostname))
+            except ValueError as e:
+                raise ModelRetry(f"无效的 IP 地址: {e!s}") from e
+            except socket.gaierror as e:
+                raise ModelRetry(f"无法解析域名: {e!s}") from e
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
+                raise ModelRetry("不允许访问内网地址")
+
         async with AsyncClient() as client:
             response = await client.get(url)
             response.raise_for_status()
-            html_content = response.text
-        if format == "html":
-            return html_content
-        soup = BeautifulSoup(html_content, "html.parser")
-        return soup.get_text(separator="\n")
+
+            mime_main = (content_type or response.headers.get("Content-Type", "")).split(";", 1)[0].strip().lower()
+
+            media_type = mime_main or guess_type(parsed.path or url)[0] or "application/octet-stream"
+
+            if not media_type.startswith(("image/", "video/", "audio/")):
+                try:
+                    text = response.text
+                except UnicodeDecodeError:
+                    pass
+                else:
+                    if re.match(r"^data:[^,]+,[\s\S]*$", text):
+                        return BinaryContent.from_data_uri(text)
+                    if media_type == "text/html":
+                        soup = BeautifulSoup(text, "html.parser")
+                        text = soup.get_text(separator="\n", strip=True)
+                        if response.url and response.url != url:
+                            text = f"[重定向自: {url}]\n\n{text}"
+                    return text
+
+            return BinaryContent(
+                data=response.content,
+                media_type=media_type,
+            )
+    except HTTPStatusError as e:
+        raise ModelRetry(f"HTTP {e.response.status_code} {e.response.reason_phrase or ''}: 请求 {url} 失败") from e
+    except ModelRetry:
+        raise
     except Exception as e:
-        raise ModelRetry(f"网页获取失败: {e!s}") from e
+        raise ModelRetry(f"获取网页内容失败: {e!s}") from e

@@ -557,20 +557,34 @@ export default function ChatPage() {
             const thoughtItems: ThoughtChainItemType[] = toolItems.map((tool) => ({
               title: tool.name,
               content: (
-                <Flex>
+                <Flex vertical>
                   {tool.args ? (
-                    <ThoughtChain.Item
-                      variant="solid"
-                      title="调用工具"
-                      description={typeof tool.args === "string" ? tool.args : JSON.stringify(tool.args)}
-                    />
+                    <>
+                      <ThoughtChain.Item variant="solid" title="调用工具" icon={<ToolOutlined />} />
+                      <Typography.Text type="secondary">
+                        {typeof tool.args === "string" ? tool.args : JSON.stringify(tool.args)}
+                      </Typography.Text>
+                    </>
                   ) : null}
                   {tool.result ? (
-                    <ThoughtChain.Item
-                      variant="solid"
-                      title="工具结果"
-                      description={typeof tool.result === "string" ? tool.result : JSON.stringify(tool.result)}
-                    />
+                    <>
+                      <ThoughtChain.Item variant="solid" title="返回结果" icon={<BulbOutlined />} />
+                      <Typography.Text type="secondary">
+                        {typeof tool.result === "string" ? tool.result : JSON.stringify(tool.result)}
+                      </Typography.Text>
+                    </>
+                  ) : null}
+                  {tool.files?.length ? (
+                    <>
+                      <ThoughtChain.Item variant="solid" title="多媒体结果" icon={<InboxOutlined />} />
+                      <FileCard.List
+                        items={tool.files.map((file) => ({
+                          name: file.name ?? "文件",
+                          src: file.url,
+                          type: file.type === "document" || file.type === "binary" ? "file" : resolveFileType(file.url),
+                        }))}
+                      />
+                    </>
                   ) : null}
                 </Flex>
               ),

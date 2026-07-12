@@ -56,6 +56,7 @@ export type ToolItem = {
   name: string;
   args?: Record<string, unknown> | string;
   result?: string;
+  files?: FileItem[];
   status?: "loading" | "success" | "error";
 };
 
@@ -154,18 +155,6 @@ const formatJson = (value?: unknown): string => {
   }
 };
 
-const formatToolResult = (content?: string | null, files?: FileItem[]): string => {
-  const parts: string[] = [];
-  if (content) {
-    parts.push(content);
-  }
-  if (files?.length) {
-    const fileLines = files.map((file) => `- ${file.name ?? "文件"}: ${file.url}`);
-    parts.push(`文件列表:\n${fileLines.join("\n")}`);
-  }
-  return parts.join("\n\n").trim();
-};
-
 const appendReasoningItem = (items: ContentItem[], reasoning?: string | null, success?: boolean) => {
   const last = items[items.length - 1];
   if (last?.part === "reasoning") {
@@ -233,11 +222,13 @@ const mergeToolResult = (
   files?: Array<string | BackendFile> | null,
 ) => {
   if (!toolCallId) return;
-  const resultText = formatToolResult(content ?? undefined, normalizeFiles(files));
-  if (!resultText) return;
+  const normalizedFiles = normalizeFiles(files);
+  const resultText = content ?? undefined;
+  if (!resultText && !normalizedFiles?.length) return;
   for (const item of items) {
     if (item.part === "tool" && item.id === toolCallId) {
-      item.result = resultText;
+      if (resultText) item.result = resultText;
+      if (normalizedFiles?.length) item.files = [...(item.files ?? []), ...normalizedFiles];
       if (success === true) {
         item.status = "success";
       } else if (success === false) {

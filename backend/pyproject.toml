@@ -140,7 +140,7 @@ possibly-missing-import = "warn"
 unsupported-dynamic-base = "warn"
 
 [tool.pytest.ini_options]
-addopts = "-p httpxyz"
+addopts = "-p lawrag"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 log_cli = true

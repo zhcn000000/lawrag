@@ -1,10 +1,10 @@
 from functools import cache
 from typing import Annotated, Literal, TypedDict
 
-import httpx
 from bs4 import BeautifulSoup
 from exa_py import AsyncExa
 from exa_py.api import Category, SearchType
+from httpx2 import AsyncClient
 from pydantic import Field
 from pydantic_ai import ModelRetry, RunContext, ToolDefinition
 from pydantic_ai.capabilities import Capability
@@ -89,7 +89,7 @@ async def fetch_web(
     format: Annotated[Literal["text", "html"], Field(description="内容格式，支持html和text两种格式")] = "text",
 ) -> str:
     try:
-        async with httpx.AsyncClient() as client:
+        async with AsyncClient() as client:
             response = await client.get(url)
             response.raise_for_status()
             html_content = response.text

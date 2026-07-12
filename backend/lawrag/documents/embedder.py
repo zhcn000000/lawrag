@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Sequence
 
-from httpx import AsyncClient, HTTPError, HTTPStatusError
+from httpx2 import AsyncClient, HTTPError, HTTPStatusError
 
 from lawrag.environments import settings
 

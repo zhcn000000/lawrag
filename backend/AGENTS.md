@@ -15,7 +15,7 @@ Python 3.14 后端，基于 FastAPI + pydantic-ai 的法律 RAG 系统。
 - **NLP**: spacy + zh_core_web_trf（句切分 / BM25 分词）
 - **BM25**: mmh3 哈希到 1_000_000 词表 + `vchord_bm25` 索引 + RRF 融合
 - **代码沙盒**: pydantic-monty（受限 Python REPL，仅可用 sys/typing/asyncio）
-- **Web 搜索**: exa-py（`search_web`）+ httpx + BeautifulSoup（`fetch_web`）
+- **Web 搜索**: exa-py（`search_web`）+ httpx2 + BeautifulSoup（`fetch_web`）
 - **鉴权**: pyjwt (HS256) + PostgreSQL `crypt()/gen_salt('bf')` 存密码哈希
 - **评估**: pydantic-evals + LLMJudge（测试样本从 `examples/case.json` 读取，默认 100 条）
 - **前端资源**: FastAPI 把仓库根 `static/`（由 `just build-ui` 产出）挂载到 `/webui/*`
@@ -39,7 +39,7 @@ backend/
 │   │   ├── struct.py          # ModelDeps (select_toolset)
 │   │   ├── rag_tools.py       # rag_toolset: list_laws / search_documents / get_article_by_path / get_law_articles / get_law_toc / browse_law
 │   │   ├── code_tools.py      # code_toolset: python_repl (pydantic-monty)
-│   │   ├── web_tools.py       # web_toolset: search_web (exa) / fetch_web (httpx + bs4)
+│   │   ├── web_tools.py       # web_toolset: search_web (exa) / fetch_web (httpx2 + bs4)
 │   │   └── subagent_tools.py  # subagent_toolset: subagent 调度 explore_agent / general_agent
 │   ├── eval/                  # 评测：pydantic-evals + LLMJudge，样本从 examples/case.json 读取
 │   │   ├── dataset.py         #   get_dataset + evaluators + LawRagCase/Report 数据模型

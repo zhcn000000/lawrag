@@ -1,76 +1,142 @@
+import json
+import logging
 from collections.abc import Sequence
-from uuid import UUID
+from os import PathLike
+from typing import TypedDict
+from uuid import UUID, uuid7
 
-from sqlalchemy import delete
+from anyio import Path as AsyncPath
+from sqlalchemy import delete, exists, select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.sql.functions import count
 from sqlmodel import col
 
 from lawrag.chat.model import aembed_documents
+from lawrag.documents.lawparser import flatten_hierarchy
 from lawrag.documents.models import Document
-from lawrag.documents.splitter import asplit_document
-from lawrag.documents.tokenizer import atokenize_document
+from lawrag.documents.nlp import asplit_document, atokenize_documents
 
 from .database import DatabaseManager
-from .tables import DocumentTable
+from .tables import DocumentTable, LawNode
+
+logger = logging.getLogger(__name__)
+
+EMBEDDABLE_NODE_TYPES = ("article", "part", "subpart", "chapter", "section", "preamble")
+
+_TYPE_UNIT = {"part": "编", "subpart": "分编", "chapter": "章", "section": "节", "article": "条"}
+
+
+class ImportResultDict(TypedDict):
+    """aimport_file / aimport_from_dir 返回的导入结果。"""
+
+    file: str
+    status: str
+    count: int
+
+
+class EmbedResultDict(TypedDict):
+    """aembed_law_articles 返回的嵌入统计。"""
+
+    law_name: str | None
+    articles_embedded: int
+    chunks_created: int
+
+
+def _build_embed_text(node: LawNode) -> str:
+    """利用导入时预计算的完整层级路径构造嵌入/检索上下文文本。"""
+    fp = node.full_path or ""
+    if node.node_type == "article":
+        return f"{fp}规定，{node.content or ''}。"
+    if node.node_type == "preamble":
+        return f"{fp} {node.content or ''}"
+    return fp
+
+
+def _node_seg(node_type: str, number: int | None, title: str | None, law_name: str) -> str:
+    if node_type == "law":
+        return f"《{law_name}》"
+    if node_type == "preamble":
+        return "序言"
+    unit = _TYPE_UNIT.get(node_type, "")
+    if number is not None and unit:
+        return f"第{number}{unit} {title or ''}".strip()
+    return title or ""
 
 
 class DocumentStore:
     def __init__(self, dbname: str | None = None) -> None:
         self.__db = DatabaseManager(dbname)
 
-    async def _ingest_document(
-        self,
-        document: Document,
-        node_id: UUID,
-        chunk_size: int = 512,
-        chunk_overlap: int = 32,
-    ) -> list[UUID]:
-        chunks: list[Document] = []
-        async for chunk in asplit_document(document, chunk_size, chunk_overlap):
-            chunks.append(chunk)
+    # ── 法律导入 ──
 
-        if not chunks:
-            return []
+    async def aimport_file(self, file_path: str | PathLike) -> ImportResultDict:
+        path = AsyncPath(file_path)
+        law_name = path.stem
+        parsed: dict = json.loads(await path.read_text(encoding="utf-8"))
 
-        contents = [c.content for c in chunks]
-        embeddings = await aembed_documents(contents)
+        nodes = flatten_hierarchy(parsed, law_name)
+        articles = sum(1 for n in nodes if n["node_type"] == "article")
+        if articles == 0:
+            return ImportResultDict(file=law_name, status="empty", count=0)
 
-        doc_ids: list[UUID] = []
-        for i, chunk in enumerate(chunks):
-            bmvector = await atokenize_document(chunk.content)
-            embeddings_i = embeddings[i] if i < len(embeddings) else []
+        ids = [uuid7() for _ in nodes]
 
-            async with self.__db.asession() as session:
-                stmt = (
-                    insert(DocumentTable)
-                    .values(
-                        node_id=node_id,
-                        content=chunk.content,
-                        vector=embeddings_i,
-                        bmvector=dict(bmvector),
-                    )
-                    .returning(col(DocumentTable.id))
-                )
-                result = await session.execute(stmt)
-                doc_id = result.scalar_one()
-                doc_ids.append(doc_id)
-        return doc_ids
+        full_paths: list[str] = [""] * len(nodes)
+        for i, n in enumerate(nodes):
+            seg = _node_seg(n["node_type"], n["number"], n["title"], law_name)
+            parent_idx = n["parent"]
+            if parent_idx is not None and parent_idx < i:
+                full_paths[i] = f"{full_paths[parent_idx]} {seg}".strip()
+            else:
+                full_paths[i] = seg
 
-    async def aload_from_text(
-        self,
-        content: str,
-        node_id: UUID,
-        name: str | None = None,
-        chunk_size: int = 4096,
-        chunk_overlap: int = 128,
-    ) -> list[UUID]:
-        document = Document(content=content, name=name)
-        return await self._ingest_document(
-            document=document,
-            node_id=node_id,
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-        )
+        values = [
+            {
+                "id": ids[i],
+                "law_name": law_name,
+                "parent_id": ids[n["parent"]] if n["parent"] is not None else None,
+                "node_type": n["node_type"],
+                "number": n["number"],
+                "content": n["title"] or n["content"],
+                "path": n["path"],
+                "full_path": full_paths[i],
+            }
+            for i, n in enumerate(nodes)
+        ]
+
+        async with self.__db.asession() as session:
+            await session.execute(delete(LawNode).where(col(LawNode.law_name) == law_name))
+            stmt = (
+                insert(LawNode)
+                .values(values)
+                .on_conflict_do_nothing(index_elements=[col(LawNode.law_name), col(LawNode.path)])
+            )
+            await session.execute(stmt)
+            await session.commit()
+
+        logger.info("Imported %s: %d nodes (%d articles)", law_name, len(nodes), articles)
+        return ImportResultDict(file=law_name, status="ok", count=articles)
+
+    async def aimport_from_dir(self, dir_path: str | PathLike) -> list[ImportResultDict]:
+        path = AsyncPath(dir_path)
+        if not await path.is_dir():
+            raise NotADirectoryError(f"Not a directory: {path}")
+
+        results: list[ImportResultDict] = []
+        paths = sorted([file_path async for file_path in path.rglob("*.json")])
+
+        for file_path in paths:
+            if await file_path.is_file() and not file_path.name.startswith("."):
+                try:
+                    logger.info("Importing %s...", file_path)
+                    result = await self.aimport_file(file_path=file_path)
+                    results.append(result)
+                except Exception:
+                    logger.exception("Failed to import %s", file_path)
+                    results.append(ImportResultDict(file=file_path.stem, status="error", count=0))
+        return results
+
+    # ── 文本嵌入 (批量) ──
 
     async def abatch_load_from_texts(
         self,
@@ -88,18 +154,18 @@ class DocumentStore:
         if not all_chunks:
             return 0
 
-        contents = [c[1] for c in all_chunks]
-        embeddings = await aembed_documents(contents)
+        documents: list[Document] = [Document(content=c) for _, c in all_chunks]
+        documents = await aembed_documents(documents)
+        documents = await atokenize_documents(documents)
 
         insert_values: list[dict] = []
         for i, (node_id, content) in enumerate(all_chunks):
-            bmvector = await atokenize_document(content)
-            embeddings_i = embeddings[i] if i < len(embeddings) else []
+            doc = documents[i]
             insert_values.append({
                 "node_id": node_id,
                 "content": content,
-                "vector": embeddings_i,
-                "bmvector": dict(bmvector),
+                "vector": doc.embedding,
+                "bmvector": doc.token_count or {},
             })
 
         sub_batch = 10
@@ -114,7 +180,83 @@ class DocumentStore:
 
         return total
 
+    # ── 法条嵌入 ──
+
+    async def aembed_law_articles(
+        self,
+        law_name: str | None = None,
+        chunk_size: int = 4096,
+        chunk_overlap: int = 128,
+        batch_size: int = 64,
+    ) -> EmbedResultDict:
+        offset = 0
+        total_nodes = 0
+        total_chunks = 0
+
+        while True:
+            async with self.__db.asession() as session:
+                stmt = (
+                    select(LawNode)
+                    .where(col(LawNode.node_type).in_(EMBEDDABLE_NODE_TYPES))
+                    .where(~exists(select(1).where(col(DocumentTable.node_id) == col(LawNode.id))))
+                )
+                if law_name is not None:
+                    stmt = stmt.where(col(LawNode.law_name) == law_name)
+                stmt = stmt.order_by(col(LawNode.law_name), col(LawNode.id)).offset(offset).limit(batch_size)
+
+                result = await session.execute(stmt)
+                rows = result.scalars().all()
+
+                if not rows:
+                    break
+
+                texts = [(_build_embed_text(node), node.id, node.law_name) for node in rows]
+
+            try:
+                chunk_count = await self.abatch_load_from_texts(
+                    texts=texts,
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap,
+                )
+                total_chunks += chunk_count
+                total_nodes += len(rows)
+            except Exception:
+                logger.exception("Failed to embed batch of %d nodes for %s", len(rows), law_name)
+                continue
+
+            offset += batch_size
+            logger.info("Embedded %s: %d nodes so far...", law_name, total_nodes)
+
+        logger.info("Embedded %s: %d nodes, %d chunks total", law_name, total_nodes, total_chunks)
+        return EmbedResultDict(
+            law_name=law_name,
+            articles_embedded=total_nodes,
+            chunks_created=total_chunks,
+        )
+
+    # ── 文档块删除 ──
+
     async def adelete_article_chunks(self, node_id: UUID) -> None:
         async with self.__db.asession() as session:
             await session.execute(delete(DocumentTable).where(col(DocumentTable.node_id) == node_id))
             await session.commit()
+
+    async def adelete_law(self, law_name: str) -> int:
+        async with self.__db.asession() as session:
+            count_stmt = select(count(col(LawNode.id))).where(
+                col(LawNode.law_name) == law_name,
+                col(LawNode.node_type) == "article",
+            )
+            result = await session.execute(count_stmt)
+            article_count = result.scalar() or 0
+            await session.execute(delete(LawNode).where(col(LawNode.law_name) == law_name))
+            await session.commit()
+
+            logger.info("Deleted law %s (%d articles)", law_name, article_count)
+            return article_count
+
+    async def alist_laws(self) -> list[str]:
+        async with self.__db.asession() as session:
+            stmt = select(col(LawNode.law_name)).where(col(LawNode.node_type) == "law").distinct()
+            result = await session.execute(stmt)
+            return [row[0] for row in result.fetchall()]

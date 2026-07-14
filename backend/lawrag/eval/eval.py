@@ -16,6 +16,7 @@ logger = getLogger(__name__)
 def get_task(offline: bool = False) -> Callable[[str], Awaitable[str]]:
     async def task(text: str) -> str:
         deps = ModelDeps()
+        deps.select_toolset = deps.select_toolset - {"code_toolkit"}
         if offline:
             deps.select_toolset = deps.select_toolset - {"web_toolkit"}
         result = await agent.run(text, deps=deps)

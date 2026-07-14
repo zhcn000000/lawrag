@@ -3,12 +3,11 @@ from uuid import UUID
 
 from asyncer import create_task_group
 from sqlalchemy import cast, func, select
-from sqlalchemy.sql.functions import count
 from sqlmodel import col
 
 from lawrag.chat.model import aembed_documents, arerank_documents
 from lawrag.documents.models import Document
-from lawrag.documents.tokenizer import atokenize_document
+from lawrag.documents.nlp import atokenize_documents
 
 from .database import DatabaseManager
 from .tables import DocumentTable, LawNode
@@ -60,7 +59,7 @@ class RAGSearch:
         regex: str | None = None,
     ) -> list[UUID]:
         query_vectors = await aembed_documents([query])
-        query_vector = query_vectors[0]
+        query_vector = query_vectors[0].embedding
 
         async with self.__db.asession() as session:
             stmt = select(col(DocumentTable.id))
@@ -86,7 +85,8 @@ class RAGSearch:
         law_name: str | None = None,
         regex: str | None = None,
     ) -> list[UUID]:
-        query_count = await atokenize_document(query)
+        docs = await atokenize_documents([query])
+        query_count = docs[0].token_count
         async with self.__db.asession() as session:
             stmt = select(col(DocumentTable.id))
             if law_name:
@@ -197,17 +197,3 @@ class RAGSearch:
 
         documents.sort(key=lambda d: d.query_score or 0, reverse=True)
         return documents
-
-    async def alist_laws(self) -> list[dict]:
-        async with self.__db.asession() as session:
-            stmt = (
-                select(
-                    col(LawNode.law_name),
-                    count(col(LawNode.id)).label("count"),
-                )
-                .where(col(LawNode.node_type) == "article")
-                .group_by(col(LawNode.law_name))
-                .order_by(col(LawNode.law_name))
-            )
-            result = await session.execute(stmt)
-            return [{"law_name": row[0], "article_count": row[1]} for row in result.fetchall()]

@@ -143,9 +143,10 @@ def get_model(
     )
 
 
+# VLLM Cohere Embed Api
 async def aembed_documents(
     documents: Sequence[Document | str],
-) -> list[list[float]]:
+) -> list[Document]:
     headers = {"Content-Type": "application/json"}
     if API_KEY:
         headers["Authorization"] = f"Bearer {API_KEY}"
@@ -160,7 +161,7 @@ async def aembed_documents(
         content: list[dict] = [{"type": "text", "text": text}]
         if img_url:
             content.append({"type": "image_url", "image_url": {"url": img_url}})
-        inputs.append(content)
+        inputs.append({"content": content})
     payload: dict = {
         "model": EMBEDDING_UID,
         "encoding_format": "float",
@@ -171,9 +172,21 @@ async def aembed_documents(
     async with http_client() as client:
         results = await client.post(f"{BASE_URL}/embed", json=payload, headers=headers)
         results.raise_for_status()
-    return [obj["embedding"] for obj in results.json()["data"]]
+        response = results.json()
+    embeddings = response["embeddings"]["float"]
+    embedded_docs: list[Document] = []
+    for i, document in enumerate(documents):
+        embedding = embeddings[i] if i < len(embeddings) else []
+        if isinstance(document, Document):
+            doc = document.model_copy()
+            doc.embedding = embedding
+        else:
+            doc = Document(content=document, embedding=embedding)
+        embedded_docs.append(doc)
+    return embedded_docs
 
 
+# VLLM Jina Rerank Api
 async def arerank_documents(
     query: str,
     documents: Sequence[Document | str],
@@ -209,7 +222,8 @@ async def arerank_documents(
     async with http_client() as client:
         results = await client.post(f"{BASE_URL}/rerank", json=payload, headers=headers)
         results.raise_for_status()
-    score_map = {item["index"]: item["relevance_score"] for item in results.json()["results"]}
+        response = results.json()
+    score_map = {item["index"]: item["relevance_score"] for item in response["results"]}
 
     reranked_docs: list[Document] = []
     for idx, src in enumerate(documents):

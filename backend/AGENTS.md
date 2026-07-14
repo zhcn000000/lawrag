@@ -37,7 +37,7 @@ backend/
 │   │   ├── agent.py           # pydantic-ai Agent 装配 (VLLMChatModel + toolsets)
 │   │   ├── model.py           # 自托管 vLLM 适配层: VLLMChatModel + VLLMProvider + + aembed/arerank_documents
 │   │   ├── struct.py          # ModelDeps (select_toolset)
-│   │   ├── rag_tools.py       # rag_toolset: list_laws / search_documents / get_article_by_path / get_law_articles / get_law_toc / browse_law
+│   │   ├── rag_tools.py       # rag_toolset: find_laws / search_documents / get_article_by_path / get_law_articles / get_law_toc / browse_law
 │   │   ├── code_tools.py      # code_toolset: python_repl (pydantic-monty)
 │   │   ├── web_tools.py       # web_toolset: search_web (exa) / fetch_web (httpx2 + bs4)
 │   │   └── subagent_tools.py  # subagent_toolset: subagent 调度 explore_agent / general_agent
@@ -59,8 +59,7 @@ backend/
 │   ├── documents/
 │   │   ├── models.py          # Document (pydantic) + get_nlp() 单例
 │   │   ├── lawparser.py       # cn_to_int / parse_multi_level / flatten_hierarchy
-│   │   ├── splitter.py        # asplit_content (spacy 句切分 + token overlap) / asplit_document
-│   │   ├── tokenizer.py       # atokenize_document (mmh3 → BM25 词频 Counter)
+│   │   ├── nlp.py        # asplit_document (spacy 句切分 + token overlap) / atokenize_documents (mmh3 → BM25 词频 Counter)
 │   │   └── converter.py       # markitdown wrapper (file/url/data-uri)
 │   ├── spider/
 │   │   ├── law_spider.py      # LawIndexSpider: NPC /law-search/search/list 翻页

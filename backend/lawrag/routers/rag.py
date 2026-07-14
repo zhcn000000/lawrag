@@ -4,6 +4,7 @@ from anyio import Path as AsyncPath
 from fastapi import APIRouter
 from pydantic import TypeAdapter
 
+from lawrag.database.document import DocumentStore
 from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragsearch import RAGSearch
 from lawrag.routers.schema import LawInfoItem, PageIndexImportResultItem, SearchItem, TocEntryItem
@@ -53,14 +54,14 @@ async def api_search(request: SearchRequest) -> SearchResponse:
 @router.post("/pageindex/import")
 async def api_pageindex_import(request: PageIndexImportRequest) -> PageIndexImportResponse:
     try:
-        pageindex = LawPageIndex()
+        docstore = DocumentStore()
         path = request.path
 
         p = AsyncPath(path)
         if await p.is_dir():
-            results = await pageindex.aimport_from_dir(dir_path=path)
+            results = await docstore.aimport_from_dir(dir_path=path)
         else:
-            result = await pageindex.aimport_file(file_path=path)
+            result = await docstore.aimport_file(file_path=path)
             results = [result]
         results = TypeAdapter(list[PageIndexImportResultItem]).validate_python(results)
         total = sum(r.count for r in results)
@@ -75,10 +76,10 @@ async def api_pageindex_import(request: PageIndexImportRequest) -> PageIndexImpo
 
 
 @router.get("/pageindex/laws")
-async def api_pageindex_list_laws() -> LawListResponse:
+async def api_pageindex_find_laws() -> LawListResponse:
     try:
         pageindex = LawPageIndex()
-        laws = await pageindex.alist_laws()
+        laws = await pageindex.afind_laws()
         laws_model = TypeAdapter(list[LawInfoItem]).validate_python(laws)
         return LawListResponse(success=True, status="获取法律列表成功", laws=laws_model)
     except Exception as e:

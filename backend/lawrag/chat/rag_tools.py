@@ -38,7 +38,7 @@ def rag_instructions(ctx: RunContext[ModelDeps]) -> str | None:
     text = """当前已经启用rag工具集功能, 用于查询已导入的法律文档库 (法律法规、司法解释等) 的内容, 使用流程如下:
 
 1. 探查法律范围: 不确定有哪些法律时, 先调用
-   list_laws(regex?, limit, offset) 列出已导入法律的名称与法条数量, 可用 regex 过滤。
+   find_laws(regex?, limit, offset) 列出已导入法律的名称与法条数量, 可用 regex 过滤。
 2. 选择入口 (根据用户意图三选一):
    - 语义检索: 关键词/语义不明确时, 用 search_documents(query, regex?, limit, offset)
      返回的 `path` 字段可用于后续下钻。
@@ -59,15 +59,15 @@ path 的开头总是 law0/ (表示法律根节点), 后面跟各级节点,
 例如 law0/b2/c2/s1 表示 第2编→第2章→第1节。
 path 不是中文标题，而是数据库物化路径
 你可以按照规律自己拼以查看其他的法律条款
-或 search_documents 等工具返回结果中的 `path` 值传入, 也可以自行构造
-- `law_name` 必须与 list_laws 或者其他工具返回的法律名称的完全一致。
+或 search_documents 等工具返回结果中的 `path` 值传入, 也可以自行构造，但格式需要正确
+- `law_name` 必须与 find_laws 或者其他工具返回的法律名称的完全一致。
 - 所有工具返回结构化的 dict/list 数据，可被代码沙箱中的 Python 代码直接处理。
 """
     return text
 
 
 @rag_capability.tool(
-    name="list_laws",
+    name="find_laws",
     description=(
         "列出所有已导入的法律及其法条数量。支持正则过滤和分页。"
         "返回 list[dict]，每个 dict 含 law_name 和 article_count。"
@@ -75,14 +75,14 @@ path 不是中文标题，而是数据库物化路径
     prepare=prepare_rag,
     include_return_schema=True,
 )
-async def list_laws(
+async def find_laws(
     ctx: RunContext[ModelDeps],
     regex: Annotated[str | None, Field(description="正则表达式过滤法律名称, 如'刑法|民法典'")] = None,
     limit: Annotated[int, Field(description="返回数量上限, 默认50")] = 50,
     offset: Annotated[int, Field(description="分页偏移量, 默认0")] = 0,
 ) -> Annotated[list[LawInfoDict], Field(description="法律列表，每项含 law_name, article_count")]:
     try:
-        return await page_index.alist_laws(regex=regex, limit=limit, offset=offset)
+        return await page_index.afind_laws(regex=regex, limit=limit, offset=offset)
     except Exception as e:
         raise ModelRetry(f"获取法律列表失败: {e!s}") from e
 

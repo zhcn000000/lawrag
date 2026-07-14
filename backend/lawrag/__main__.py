@@ -13,6 +13,7 @@ from rich.table import Table
 from typer import Argument, Option, Typer
 
 from lawrag.chat.agent import ModelDeps, agent
+from lawrag.database.document import DocumentStore
 from lawrag.database.initdb import clean_db, init_db, reset_db
 from lawrag.database.pageindex import LawPageIndex, TocEntryDict
 from lawrag.database.ragsearch import RAGSearch
@@ -186,13 +187,13 @@ async def pageindex_import(
     path: Annotated[Path, Argument(help="Path to law .json file or directory")] | None = None,
     category: Annotated[str | None, Option("--category", "-c", help="Category for the laws")] = None,
 ) -> None:
-    pageindex = LawPageIndex()
+    docstore = DocumentStore()
     if path is None:
         path = settings.DATA_ROOT / "structured_laws"
     if path.is_dir():
-        results = await pageindex.aimport_from_dir(dir_path=path)
+        results = await docstore.aimport_from_dir(dir_path=path)
     else:
-        result = await pageindex.aimport_file(file_path=path)
+        result = await docstore.aimport_file(file_path=path)
         results = [result]
     total = sum(r.get("count", 0) for r in results)
     ok = sum(1 for r in results if r.get("status") == "ok")
@@ -204,7 +205,7 @@ async def pageindex_import(
 @runnify
 async def pageindex_list() -> None:
     pageindex = LawPageIndex()
-    laws = await pageindex.alist_laws()
+    laws = await pageindex.afind_laws()
     if not laws:
         print("暂无已导入的法律")
         return
@@ -273,9 +274,9 @@ async def pageindex_embed(
     chunk_overlap: Annotated[int, Option("--chunk-overlap", "-o", help="Chunk overlap in tokens")] = 128,
     batch_size: Annotated[int, Option("--batch-size", "-b", help="Articles per batch")] = 64,
 ) -> None:
-    pageindex = LawPageIndex()
+    docstore = DocumentStore()
     logger.info("开始嵌入法律 '%s' 的法条...", law_name)
-    result = await pageindex.aembed_law_articles(
+    result = await docstore.aembed_law_articles(
         law_name=law_name,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,

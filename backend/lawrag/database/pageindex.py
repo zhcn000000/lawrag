@@ -1,27 +1,17 @@
-import json
 import logging
 from itertools import starmap
-from os import PathLike
 from typing import TypedDict
-from uuid import UUID, uuid7
+from uuid import UUID
 
-from anyio import Path as AsyncPath
-from sqlalchemy import delete, exists, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import select
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.functions import count
 from sqlmodel import col
 
-from lawrag.database.document import DocumentStore
-from lawrag.documents.lawparser import flatten_hierarchy
-
 from .database import DatabaseManager
-from .tables import DocumentTable, LawNode
+from .tables import LawNode
 
 logger = logging.getLogger(__name__)
-
-# 参与向量/BM25 召回的节点类型: 条为初筛主体, 编/分编/章/节标题用于索引到上层, 序言作为整体
-EMBEDDABLE_NODE_TYPES = ("article", "part", "subpart", "chapter", "section", "preamble")
 
 
 class ArticleDict(TypedDict):
@@ -80,26 +70,10 @@ class TocEntryDict(TypedDict):
 
 
 class LawInfoDict(TypedDict):
-    """alist_laws 返回的法律概要条目。"""
+    """afind_laws 返回的法律概要条目。"""
 
     law_name: str
     article_count: int
-
-
-class ImportResultDict(TypedDict):
-    """aimport_file / aimport_from_dir 返回的导入结果。"""
-
-    file: str
-    status: str
-    count: int
-
-
-class EmbedResultDict(TypedDict):
-    """aembed_law_articles 返回的嵌入统计。"""
-
-    law_name: str | None
-    articles_embedded: int
-    chunks_created: int
 
 
 def _ancestor_titles(p1: LawNode | None, p2: LawNode | None) -> tuple[LawNode | None, LawNode | None]:
@@ -131,16 +105,6 @@ def _article_dict(article: LawNode, p1: LawNode | None, p2: LawNode | None) -> A
     )
 
 
-def _build_embed_text(node: LawNode) -> str:
-    """利用导入时预计算的完整层级路径构造嵌入/检索上下文文本。"""
-    fp = node.full_path or ""
-    if node.node_type == "article":
-        return f"{fp}规定，{node.content or ''}。"
-    if node.node_type == "preamble":
-        return f"{fp} {node.content or ''}"
-    return fp
-
-
 class LawPageIndex:
     def __init__(self, dbname: str | None = None) -> None:
         self.__db = DatabaseManager(dbname)
@@ -158,92 +122,6 @@ class LawPageIndex:
         if law_name is not None:
             stmt = stmt.where(col(LawNode.law_name) == law_name)
         return stmt, p1, p2
-
-    async def aimport_file(
-        self,
-        file_path: str | PathLike,
-    ) -> ImportResultDict:
-        path = AsyncPath(file_path)
-        law_name = path.stem
-        parsed: dict = json.loads(await path.read_text(encoding="utf-8"))
-
-        nodes = flatten_hierarchy(parsed, law_name)
-        articles = sum(1 for n in nodes if n["node_type"] == "article")
-        if articles == 0:
-            return ImportResultDict(file=law_name, status="empty", count=0)
-
-        ids = [uuid7() for _ in nodes]
-
-        _type_unit = {"part": "编", "subpart": "分编", "chapter": "章", "section": "节", "article": "条"}
-
-        def _node_seg(node_type: str, number: int | None, title: str | None) -> str:
-            if node_type == "law":
-                return f"《{law_name}》"
-            if node_type == "preamble":
-                return "序言"
-            unit = _type_unit.get(node_type, "")
-            if number is not None and unit:
-                return f"第{number}{unit} {title or ''}".strip()
-            return title or ""
-
-        full_paths: list[str] = [""] * len(nodes)
-        for i, n in enumerate(nodes):
-            seg = _node_seg(n["node_type"], n["number"], n["title"])
-            parent_idx = n["parent"]
-            if parent_idx is not None and parent_idx < i:
-                full_paths[i] = f"{full_paths[parent_idx]} {seg}".strip()
-            else:
-                full_paths[i] = seg
-
-        values = [
-            {
-                "id": ids[i],
-                "law_name": law_name,
-                "parent_id": ids[n["parent"]] if n["parent"] is not None else None,
-                "node_type": n["node_type"],
-                "number": n["number"],
-                "content": n["title"] or n["content"],
-                "path": n["path"],
-                "full_path": full_paths[i],
-            }
-            for i, n in enumerate(nodes)
-        ]
-
-        async with self.__db.asession() as session:
-            # 重新导入前先清空该法律的所有节点, 保证幂等
-            await session.execute(delete(LawNode).where(col(LawNode.law_name) == law_name))
-            stmt = (
-                insert(LawNode)
-                .values(values)
-                .on_conflict_do_nothing(index_elements=[col(LawNode.law_name), col(LawNode.path)])
-            )
-            await session.execute(stmt)
-            await session.commit()
-
-        logger.info("Imported %s: %d nodes (%d articles)", law_name, len(nodes), articles)
-        return ImportResultDict(file=law_name, status="ok", count=articles)
-
-    async def aimport_from_dir(
-        self,
-        dir_path: str | PathLike,
-    ) -> list[ImportResultDict]:
-        path = AsyncPath(dir_path)
-        if not await path.is_dir():
-            raise NotADirectoryError(f"Not a directory: {path}")
-
-        results: list[ImportResultDict] = []
-        paths = sorted([file_path async for file_path in path.rglob("*.json")])
-
-        for file_path in paths:
-            if await file_path.is_file() and not file_path.name.startswith("."):
-                try:
-                    logger.info("Importing %s...", file_path)
-                    result = await self.aimport_file(file_path=file_path)
-                    results.append(result)
-                except Exception:
-                    logger.exception("Failed to import %s", file_path)
-                    results.append(ImportResultDict(file=file_path.stem, status="error", count=0))
-        return results
 
     async def aget_by_law_article(
         self,
@@ -414,7 +292,7 @@ class LawPageIndex:
 
             return [_to_toc_entry(e) for e in toc]
 
-    async def alist_laws(
+    async def afind_laws(
         self,
         regex: str | None = None,
         limit: int | None = None,
@@ -438,71 +316,3 @@ class LawPageIndex:
                 stmt = stmt.offset(offset)
             result = await session.execute(stmt)
             return [LawInfoDict(law_name=row[0], article_count=row[1]) for row in result.fetchall()]
-
-    async def adelete_law(self, law_name: str) -> int:
-        async with self.__db.asession() as session:
-            count_stmt = select(count(col(LawNode.id))).where(
-                col(LawNode.law_name) == law_name,
-                col(LawNode.node_type) == "article",
-            )
-            result = await session.execute(count_stmt)
-            article_count = result.scalar() or 0
-            await session.execute(delete(LawNode).where(col(LawNode.law_name) == law_name))
-            await session.commit()
-
-            logger.info("Deleted law %s (%d articles)", law_name, article_count)
-            return article_count
-
-    async def aembed_law_articles(
-        self,
-        law_name: str | None = None,
-        chunk_size: int = 4096,
-        chunk_overlap: int = 128,
-        batch_size: int = 64,
-    ) -> EmbedResultDict:
-        doc_store = DocumentStore()
-
-        offset = 0
-        total_nodes = 0
-        total_chunks = 0
-
-        while True:
-            async with self.__db.asession() as session:
-                stmt = (
-                    select(LawNode)
-                    .where(col(LawNode.node_type).in_(EMBEDDABLE_NODE_TYPES))
-                    .where(~exists(select(1).where(col(DocumentTable.node_id) == col(LawNode.id))))
-                )
-                if law_name is not None:
-                    stmt = stmt.where(col(LawNode.law_name) == law_name)
-                stmt = stmt.order_by(col(LawNode.law_name), col(LawNode.id)).offset(offset).limit(batch_size)
-
-                result = await session.execute(stmt)
-                rows = result.scalars().all()
-
-                if not rows:
-                    break
-
-                texts = [(_build_embed_text(node), node.id, node.law_name) for node in rows]
-
-            try:
-                chunk_count = await doc_store.abatch_load_from_texts(
-                    texts=texts,
-                    chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap,
-                )
-                total_chunks += chunk_count
-                total_nodes += len(rows)
-            except Exception:
-                logger.exception("Failed to embed batch of %d nodes for %s", len(rows), law_name)
-                continue
-
-            offset += batch_size
-            logger.info("Embedded %s: %d nodes so far...", law_name, total_nodes)
-
-        logger.info("Embedded %s: %d nodes, %d chunks total", law_name, total_nodes, total_chunks)
-        return EmbedResultDict(
-            law_name=law_name,
-            articles_embedded=total_nodes,
-            chunks_created=total_chunks,
-        )

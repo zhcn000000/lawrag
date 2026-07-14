@@ -5,12 +5,12 @@ from pydantic import BaseModel
 
 class ModelDeps(BaseModel):
     max_result_retries: int = 3
-    select_toolset: set[Literal["rag_toolkit", "code_toolkit", "web_toolkit", "subagent_toolkit"]] = {
+    select_toolset: frozenset[Literal["rag_toolkit", "code_toolkit", "web_toolkit", "subagent_toolkit"]] = frozenset({
         "rag_toolkit",
         "code_toolkit",
         "web_toolkit",
         "subagent_toolkit",
-    }
+    })
 
 
 class ToolInfo(BaseModel):

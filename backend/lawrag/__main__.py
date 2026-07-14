@@ -7,7 +7,7 @@ import uvicorn
 import uvloop
 from asyncer import runnify
 from pydantic import TypeAdapter
-from rich import traceback
+from rich import print, traceback
 from rich.logging import RichHandler
 from rich.table import Table
 from typer import Argument, Option, Typer
@@ -330,8 +330,9 @@ async def spider_download(
 @runnify
 async def eval_run(
     input: Annotated[Path | None, Option("--input", "-i", help="评估样本 JSON 输入路径")] = None,
-    max_cases: Annotated[int | None, Option("--max-cases", "-n", help="最多评估的样本数, 默认全部")] = None,
     output: Annotated[Path | None, Option("--output", "-o", help="评估报告 JSON 输出路径")] = None,
+    max_cases: Annotated[int | None, Option("--max-cases", "-n", help="最多评估的样本数, 默认全部")] = None,
+    offline: Annotated[bool, Option("--offline", "-f", help="是否离线评估, 禁用 web_toolkit等联网工具")] = False,
 ) -> None:
     """运行法律问答测试集, 用 LLM 裁判评估 Agent 输出并生成报告。
 
@@ -348,7 +349,7 @@ async def eval_run(
     cases = TypeAdapter(list[LawRagCase]).validate_json(input.read_bytes())
 
     logger.info("开始评估 (最多 %s 条样本)...", max_cases if max_cases is not None else "全部")
-    reports = await evaluate(cases, max_cases=max_cases)
+    reports = await evaluate(cases, max_cases=max_cases, offline=offline)
 
     passed = sum(1 for r in reports if r.success)
     total = len(reports)

@@ -1,3 +1,5 @@
+from collections.abc import Awaitable, Callable
+
 from pydantic_evals import Case
 
 from lawrag.chat.model import agent
@@ -6,12 +8,22 @@ from lawrag.chat.struct import ModelDeps
 from .dataset import LawRagCase, LawRagCaseFailure, LawRagCaseReport, get_dataset
 
 
-async def task(text: str) -> str:
-    result = await agent.run(text, deps=ModelDeps())
-    return result.output
+def get_task(offline: bool = False) -> Callable[[str], Awaitable[str]]:
+    async def task(text: str) -> str:
+        deps = ModelDeps()
+        if offline:
+            deps.select_toolset = deps.select_toolset - {"web_toolkit"}
+        result = await agent.run(text, deps=deps)
+        return result.output
+
+    return task
 
 
-async def evaluate(cases: list[LawRagCase], max_cases: int | None = None) -> list[LawRagCaseReport | LawRagCaseFailure]:
+async def evaluate(
+    cases: list[LawRagCase],
+    max_cases: int | None = None,
+    offline: bool = False,
+) -> list[LawRagCaseReport | LawRagCaseFailure]:
     dataset_cases = [
         Case(
             name=case.name,
@@ -22,6 +34,7 @@ async def evaluate(cases: list[LawRagCase], max_cases: int | None = None) -> lis
     ]
 
     dataset = get_dataset(cases=dataset_cases, max_cases=max_cases)
+    task = get_task(offline=offline)
     results = await dataset.evaluate(task=task)
     reports: list[LawRagCaseReport | LawRagCaseFailure] = []
     for case in results.cases:

@@ -61,7 +61,7 @@ class VLLMChatModel(OpenAIChatModel):
     async def _map_user_prompt(self, part: UserPromptPart) -> ChatCompletionUserMessageParam:
         content: str | list[dict]
         if isinstance(part.content, str):
-            content = part.content
+            content = [{"type": "text", "text": part.content}]
         else:
             content = []
             for item in part.content:

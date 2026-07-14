@@ -106,8 +106,8 @@ class ChatRequest(BaseModel):
     model: str | None = None
     thinking: bool = True
     tools: Annotated[
-        set[Literal["rag_toolkit", "code_toolkit", "web_toolkit", "subagent_toolkit"]],
-        Field(default_factory=set),
+        frozenset[Literal["rag_toolkit", "code_toolkit", "web_toolkit", "subagent_toolkit"]],
+        Field(default_factory=frozenset),
     ]
 
 

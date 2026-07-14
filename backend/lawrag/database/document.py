@@ -5,7 +5,7 @@ from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import col
 
-from lawrag.documents.embedder import aembed_documents
+from lawrag.chat.model import aembed_documents
 from lawrag.documents.models import Document
 from lawrag.documents.splitter import asplit_document
 from lawrag.documents.tokenizer import atokenize_document

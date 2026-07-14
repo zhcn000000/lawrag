@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 
+from lawrag.chat.agent import ModelDeps, agent
 from lawrag.database.user import TokenDataDict, UserManager
 from lawrag.environments import find_project_directory
 from lawrag.routers.user import CurrentUserDep
@@ -23,6 +24,7 @@ app = FastAPI()
 app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
 app.include_router(rag_router, prefix="/api/rag", tags=["rag"])
 app.include_router(user_router, prefix="/api/users", tags=["users"])
+
 static_path = find_project_directory() / "static"
 if static_path.exists() and static_path.is_dir():
     assets_path = static_path / "assets"
@@ -89,4 +91,4 @@ async def get_current_user(
     return UserResponse(id=user_info["id"], username=user_info["username"])
 
 
-__all__ = ["app", "chat_router", "rag_router", "user_router"]
+__all__ = ["ModelDeps", "agent", "app", "chat_router", "rag_router", "user_router"]

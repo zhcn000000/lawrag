@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 class Document(BaseModel):
     content: str
+    image_url: str | None = None
     name: str | None = None
     query_score: float | None = None
     id: UUID | None = None

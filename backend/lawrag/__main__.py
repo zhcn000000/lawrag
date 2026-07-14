@@ -12,6 +12,7 @@ from rich.logging import RichHandler
 from rich.table import Table
 from typer import Argument, Option, Typer
 
+from lawrag.chat.agent import ModelDeps, agent
 from lawrag.database.initdb import clean_db, init_db, reset_db
 from lawrag.database.pageindex import LawPageIndex, TocEntryDict
 from lawrag.database.ragsearch import RAGSearch
@@ -28,7 +29,6 @@ cmd = Typer(pretty_exceptions_enable=False)
 database_cmd = Typer(pretty_exceptions_enable=False, help="数据库操作命令")
 pageindex_cmd = Typer(pretty_exceptions_enable=False, help="法条索引命令")
 spider_cmd = Typer(pretty_exceptions_enable=False, help="法律爬虫命令")
-eval_cmd = Typer(pretty_exceptions_enable=False, help="模型评估命令")
 
 
 @cmd.command()
@@ -53,33 +53,30 @@ async def start() -> None:
     await server.serve()
 
 
-@database_cmd.command("init")
+@cmd.command()
 @runnify
-async def database_init(
-    dbname: Annotated[str | None, Option("--dbname", "-d", help="Name of the database to initialize")] = None,
+async def cli(
+    tools: Annotated[
+        list[str] | None,
+        Option("--tools", "-t", help="Available tools"),
+    ] = None,
 ) -> None:
-    await init_db(dbname=dbname)
+    """启动交互式命令行"""
+    if tools is None:
+        toolsets = frozenset({"rag_toolkit", "code_toolkit", "web_toolkit", "subagent_toolkit"})
+    else:
+        for t in tools:
+            if t not in {"rag_toolkit", "code_toolkit", "web_toolkit", "subagent_toolkit"}:
+                raise ValueError(f"未知工具: {t}")
+        toolsets = frozenset(tools)
+    await agent.to_cli(
+        ModelDeps(select_toolset=toolsets),  # type: ignore
+    )
 
 
-@database_cmd.command("reset")
+@cmd.command("search")
 @runnify
-async def database_reset(
-    dbname: Annotated[str | None, Option("--dbname", "-d", help="Name of the database to reset")] = None,
-) -> None:
-    await reset_db(dbname=dbname)
-
-
-@database_cmd.command("clean")
-@runnify
-async def database_clean(
-    dbname: Annotated[str | None, Option("--dbname", "-d", help="Name of the database to clean")] = None,
-) -> None:
-    await clean_db(dbname=dbname)
-
-
-@pageindex_cmd.command("search")
-@runnify
-async def pageindex_search(
+async def search(
     query: Annotated[str, Argument(help="Search query")],
     law_name: Annotated[str | None, Option("--law", "-l", help="Filter by law name")] = None,
     regex: Annotated[str | None, Option("--regex", "-r", help="Filter by regex pattern")] = None,
@@ -108,6 +105,79 @@ async def pageindex_search(
         print(table)
     else:
         print("无搜索结果")
+
+
+@cmd.command("eval")
+@runnify
+async def eval_run(
+    input: Annotated[Path | None, Option("--input", "-i", help="评估样本 JSON 输入路径")] = None,
+    output: Annotated[Path | None, Option("--output", "-o", help="评估报告 JSON 输出路径")] = None,
+    max_cases: Annotated[int | None, Option("--max-cases", "-n", help="最多评估的样本数, 默认全部")] = None,
+    offline: Annotated[bool, Option("--offline", "-f", help="是否离线评估, 禁用 web_toolkit等联网工具")] = False,
+) -> None:
+    """运行法律问答测试集, 用 LLM 裁判评估 Agent 输出并生成报告。
+
+    从 JSON 测试集文件 (默认 ``examples/case.json``) 读取问答样本, 逐条调用 Agent 生成回答,
+    与标准答案对比后由 LLM 裁判判定是否通过, 结果以 rich 表格展示并写入 JSON。
+    """
+    if output is None:
+        output = settings.DATA_ROOT / "eval" / "report.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    if input is None:
+        input = find_project_directory() / "examples" / "case.json"
+
+    cases = TypeAdapter(list[LawRagCase]).validate_json(input.read_bytes())
+
+    logger.info("开始评估 (最多 %s 条样本)...", max_cases if max_cases is not None else "全部")
+    reports = await evaluate(cases, max_cases=max_cases, offline=offline)
+
+    passed = sum(1 for r in reports if r.success)
+    total = len(reports)
+    table = Table(title=f"法律问答评估结果 (通过 {passed}/{total})", title_style="bold")
+    table.add_column("结果", width=6)
+    table.add_column("问题", style="green", width=40)
+    table.add_column("评价", style="white")
+    for r in reports:
+        mark = "[green]PASS[/green]" if r.success else "[red]FAIL[/red]"
+        question = r.question.strip().replace("\n", " ")
+        question = question[:38] + ("..." if len(question) > 38 else "")
+        note = r.evaluation_note if isinstance(r, LawRagCaseReport) else r.error_message
+        note = note.strip().replace("\n", " ")
+        note = note[:80] + ("..." if len(note) > 80 else "")
+        table.add_row(mark, question, note)
+    print(table)
+
+    output.write_bytes(
+        TypeAdapter(list[LawRagCaseReport | LawRagCaseFailure]).dump_json(reports, indent=2, ensure_ascii=False),
+    )
+    rate = passed / total if total else 0.0
+    print(f"通过率: {rate:.1%} ({passed}/{total})")
+    print(f"报告已写入: {output}")
+
+
+@database_cmd.command("init")
+@runnify
+async def database_init(
+    dbname: Annotated[str | None, Option("--dbname", "-d", help="Name of the database to initialize")] = None,
+) -> None:
+    await init_db(dbname=dbname)
+
+
+@database_cmd.command("reset")
+@runnify
+async def database_reset(
+    dbname: Annotated[str | None, Option("--dbname", "-d", help="Name of the database to reset")] = None,
+) -> None:
+    await reset_db(dbname=dbname)
+
+
+@database_cmd.command("clean")
+@runnify
+async def database_clean(
+    dbname: Annotated[str | None, Option("--dbname", "-d", help="Name of the database to clean")] = None,
+) -> None:
+    await clean_db(dbname=dbname)
 
 
 @pageindex_cmd.command("import")
@@ -326,59 +396,9 @@ async def spider_download(
     logger.info("Download+parse completed: %d OK, %d failed", ok, failed)
 
 
-@eval_cmd.command("run")
-@runnify
-async def eval_run(
-    input: Annotated[Path | None, Option("--input", "-i", help="评估样本 JSON 输入路径")] = None,
-    output: Annotated[Path | None, Option("--output", "-o", help="评估报告 JSON 输出路径")] = None,
-    max_cases: Annotated[int | None, Option("--max-cases", "-n", help="最多评估的样本数, 默认全部")] = None,
-    offline: Annotated[bool, Option("--offline", "-f", help="是否离线评估, 禁用 web_toolkit等联网工具")] = False,
-) -> None:
-    """运行法律问答测试集, 用 LLM 裁判评估 Agent 输出并生成报告。
-
-    从 JSON 测试集文件 (默认 ``examples/case.json``) 读取问答样本, 逐条调用 Agent 生成回答,
-    与标准答案对比后由 LLM 裁判判定是否通过, 结果以 rich 表格展示并写入 JSON。
-    """
-    if output is None:
-        output = settings.DATA_ROOT / "eval" / "report.json"
-    output.parent.mkdir(parents=True, exist_ok=True)
-
-    if input is None:
-        input = find_project_directory() / "examples" / "case.json"
-
-    cases = TypeAdapter(list[LawRagCase]).validate_json(input.read_bytes())
-
-    logger.info("开始评估 (最多 %s 条样本)...", max_cases if max_cases is not None else "全部")
-    reports = await evaluate(cases, max_cases=max_cases, offline=offline)
-
-    passed = sum(1 for r in reports if r.success)
-    total = len(reports)
-    table = Table(title=f"法律问答评估结果 (通过 {passed}/{total})", title_style="bold")
-    table.add_column("结果", width=6)
-    table.add_column("问题", style="green", width=40)
-    table.add_column("评价", style="white")
-    for r in reports:
-        mark = "[green]PASS[/green]" if r.success else "[red]FAIL[/red]"
-        question = r.question.strip().replace("\n", " ")
-        question = question[:38] + ("..." if len(question) > 38 else "")
-        note = r.evaluation_note if isinstance(r, LawRagCaseReport) else r.error_message
-        note = note.strip().replace("\n", " ")
-        note = note[:80] + ("..." if len(note) > 80 else "")
-        table.add_row(mark, question, note)
-    print(table)
-
-    output.write_bytes(
-        TypeAdapter(list[LawRagCaseReport | LawRagCaseFailure]).dump_json(reports, indent=2, ensure_ascii=False),
-    )
-    rate = passed / total if total else 0.0
-    print(f"通过率: {rate:.1%} ({passed}/{total})")
-    print(f"报告已写入: {output}")
-
-
 cmd.add_typer(spider_cmd, name="spider")
 cmd.add_typer(pageindex_cmd, name="pageindex")
 cmd.add_typer(database_cmd, name="database")
-cmd.add_typer(eval_cmd, name="eval")
 
 
 def main():

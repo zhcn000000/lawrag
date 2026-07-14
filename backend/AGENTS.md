@@ -34,8 +34,8 @@ backend/
 │   │   ├── user.py            # /api/users CRUD
 │   │   └── schema.py          # 所有 Pydantic 请求/响应模型
 │   ├── chat/
-│   │   ├── model.py           # pydantic-ai Agent 装配 (VLLMChatModel + toolsets)
-│   │   ├── chat_model.py      # 自托管 vLLM 适配层: VLLMChatModel + VLLMProvider + get_model() (默认 qwen3.5)
+│   │   ├── agent.py           # pydantic-ai Agent 装配 (VLLMChatModel + toolsets)
+│   │   ├── model.py           # 自托管 vLLM 适配层: VLLMChatModel + VLLMProvider + + aembed/arerank_documents
 │   │   ├── struct.py          # ModelDeps (select_toolset)
 │   │   ├── rag_tools.py       # rag_toolset: list_laws / search_documents / get_article_by_path / get_law_articles / get_law_toc / browse_law
 │   │   ├── code_tools.py      # code_toolset: python_repl (pydantic-monty)
@@ -59,7 +59,6 @@ backend/
 │   ├── documents/
 │   │   ├── models.py          # Document (pydantic) + get_nlp() 单例
 │   │   ├── lawparser.py       # cn_to_int / parse_multi_level / flatten_hierarchy
-│   │   ├── embedder.py        # aembed_documents / arerank_* (qwen3-embedding/qwen3-reranker)
 │   │   ├── splitter.py        # asplit_content (spacy 句切分 + token overlap) / asplit_document
 │   │   ├── tokenizer.py       # atokenize_document (mmh3 → BM25 词频 Counter)
 │   │   └── converter.py       # markitdown wrapper (file/url/data-uri)
@@ -86,7 +85,7 @@ data/
 ├── downloaded_laws/*.docx             # spider download 原始文件
 ├── raw_laws/<law_name>.txt            # markitdown 转换结果
 ├── structured_laws/<law_name>.json    # parse_multi_level 输出的 JSON 序列化结果 (pageindex import 输入)
-└── eval/report.json                   # eval run 默认输出
+└── eval/report.json                   # eval 默认输出
 ```
 
 仓库根 `examples/report.json` 是课程提交版 100 条问答评测结果。
@@ -142,7 +141,7 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 - `search <law_name> <query> [-l LIMIT]`（按 content ILIKE 过滤；**注意**：`__main__.pageindex_search` 是顶层命令，此处为局部 ILIKE 过滤，名称易混淆）
 - `embed [law_name] [-s CHUNK_SIZE] [-o CHUNK_OVERLAP] [-b BATCH_SIZE]`（走 `LawPageIndex.aembed_law_articles` → `DocumentStore.abatch_load_from_texts`）
 
-`eval run [-i INPUT] [-n MAX_CASES] [-o OUTPUT]` — 跑法律问答样本：从 JSON 测试集（`-i`，默认仓库根 `examples/case.json`）读取问答样本，用 Agent 生成答案并与标准答案对比，由 LLMJudge 打分；结果以 rich 表格展示并以 JSON 写入 `<DATA_ROOT>/eval/report.json`。仓库根 `examples/report.json` 保留课程提交版完整结果。默认 100 条以《劳动合同法》为主的样本。
+`eval [-i INPUT] [-n MAX_CASES] [-o OUTPUT]` — 跑法律问答样本：从 JSON 测试集（`-i`，默认仓库根 `examples/case.json`）读取问答样本，用 Agent 生成答案并与标准答案对比，由 LLMJudge 打分；结果以 rich 表格展示并以 JSON 写入 `<DATA_ROOT>/eval/report.json`。仓库根 `examples/report.json` 保留课程提交版完整结果。默认 100 条以《劳动合同法》为主的样本。
 
 仓库根目录 `justfile` 一键命令：`just web` / `just initdb` / `just eval` / `backend-format|lint|typecheck` 等（详见仓库根 `justfile`）。
 

@@ -33,13 +33,13 @@ backend/
 │   │   ├── user.py            # /api/users CRUD
 │   │   └── schema.py          # 所有 Pydantic 请求/响应模型
 │   ├── chat/
-│   │   ├── model.py           # pydantic-ai Agent 装配 (VLLMChatModel + toolsets)
-│   │   ├── chat_model.py      # 自托管 vLLM 适配层: VLLMChatModel + VLLMProvider + get_model() (默认 qwen3.5)
+│   │   ├── agent.py           # pydantic-ai Agent 装配 (VLLMChatModel + toolsets)
+│   │   ├── model.py           # 自托管 vLLM 适配层: VLLMChatModel + VLLMProvider + + aembed/arerank_documents
 │   │   ├── struct.py          # ModelDeps (select_toolset)
 │   │   ├── rag_tools.py       # rag_toolset: list_laws / search_documents / get_article_by_path / get_law_articles / get_law_toc / browse_law
 │   │   ├── code_tools.py      # code_toolset: python_repl (pydantic-monty)
-│   │   ├── web_tools.py       # web_toolset: search_web (exa) / fetch_web (httpx + bs4)
-│   │   └── subagent_tools.py  # subagent_toolset: 调度 explore_agent / general_agent
+│   │   ├── web_tools.py       # web_toolset: search_web (exa) / fetch_web (httpx2 + bs4)
+│   │   └── subagent_tools.py  # subagent_toolset: subagent 调度 explore_agent / general_agent
 │   ├── eval/                  # 评测：pydantic-evals + LLMJudge，样本从 examples/case.json 读取
 │   │   ├── dataset.py         #   get_dataset + evaluators + LawRagCase/Report 数据模型
 │   │   └── eval.py            #   evaluate(): 跑 Agent + LLMJudge，返回 LawRagCaseReport 列表
@@ -50,7 +50,7 @@ backend/
 │   │   ├── types.py           # BM25Vector / BM25Loader / BM25Dumper / Password
 │   │   ├── tables.py          # SQLModel 表: User, SessionTable, HistoryTable, LawNode, DocumentTable
 │   │   ├── initdb.py          # 创建扩展 (pgcrypto/vchord/vchord_bm25) + 默认 admin 账号
-│   │   ├── pageindex.py       # LawPageIndex: 法律结构树导入与查询
+│   │   ├── pageindex.py       # LawPageIndex: 法律结构树 (law/preamble/part/subpart/chapter/section/article) 导入与查询
 │   │   ├── ragsearch.py         # RAGSearch: 向量+BM25 混合检索 (RRF) + rerank + 多级 page index 面包屑
 │   │   ├── document.py        # DocumentStore: 分块 → 嵌入 → 写 documents 表
 │   │   ├── history.py         # HistoryStore: 会话 + pydantic-ai ModelMessage 持久化
@@ -58,20 +58,19 @@ backend/
 │   ├── documents/
 │   │   ├── models.py          # Document (pydantic) + get_nlp() 单例
 │   │   ├── lawparser.py       # cn_to_int / parse_multi_level / flatten_hierarchy
-│   │   ├── embedder.py        # aembed_documents / arerank_* (qwen3-embedding/qwen3-reranker)
 │   │   ├── splitter.py        # asplit_content (spacy 句切分 + token overlap) / asplit_document
 │   │   ├── tokenizer.py       # atokenize_document (mmh3 → BM25 词频 Counter)
 │   │   └── converter.py       # markitdown wrapper (file/url/data-uri)
 │   ├── spider/
 │   │   ├── law_spider.py      # LawIndexSpider: NPC /law-search/search/list 翻页
 │   │   ├── content_spider.py  # ContentDownloadSpider: 签名 URL → docx 下载
-│   │   ├── runner.py          # AsyncCrawlerRunner 入口
-│   │   ├── pipelines.py       # LawIndexPipeline, ContentDownloadPipeline
+│   │   ├── runner.py          # AsyncCrawlerRunner 入口 (run_law_index_spider / run_content_download)
+│   │   ├── pipelines.py       # LawIndexPipeline, ContentDownloadPipeline (markitdown → parse_multi_level → json.dumps)
 │   │   └── items.py           # LawIndexItem / LawDownloadItem
 │   └── environments.py        # pydantic-settings 配置 + 自动向上查找 .proj_root
 ├── tests/
 │   ├── conftest.py            # anyio_backend=asyncio
-│   ├── test_lawparser.py      # cn_to_int / flatten_hierarchy / parse_multi_level / TOC（离线）
+│   ├── test_lawparser.py      # cn_to_int / flatten_hierarchy / parse_multi_level / TOC
 │   └── test_pageindex.py      # @pytest.mark.db 真实数据库 import/list/get/search/toc/delete
 ├── pyproject.toml
 └── uv.lock
@@ -85,7 +84,7 @@ data/
 ├── downloaded_laws/*.docx             # spider download 原始文件
 ├── raw_laws/<law_name>.txt            # markitdown 转换结果
 ├── structured_laws/<law_name>.json    # parse_multi_level 输出 (pageindex import 输入)
-└── eval/report.json                   # eval run 默认输出
+└── eval/report.json                   # eval 默认输出
 ```
 
 仓库根 `examples/report.json` 是课程提交版 100 条问答评测结果。
@@ -116,7 +115,7 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 - `pageindex convert [-r RAW_DIR] [-o OUTPUT_DIR] [-f FILTER]` — 从 `raw_laws/*.txt` 重新解析生成 `structured_laws/*.json`（无需重新下载）。
 - `pageindex import [PATH] [-c CATEGORY]` — 把 `structured_laws/*.json` 导入 `law_nodes`；`(law_name, path)` 唯一键保证幂等。
 - `pageindex list|show|toc|search|embed` — 法条浏览/查询/嵌入：`embed` 走 `LawPageIndex.aembed_law_articles` → `DocumentStore.abatch_load_from_texts`。
-- `eval run [-i INPUT] [-n MAX_CASES] [-o OUTPUT]` — 从测试集（`-i`，默认仓库根 `examples/case.json`）读取问答样本，用 Agent 生成答案并与标准答案对比，LLMJudge 打分，结果写入 `<DATA_ROOT>/eval/report.json`。
+- `eval [-i INPUT] [-n MAX_CASES] [-o OUTPUT]` — 从测试集（`-i`，默认仓库根 `examples/case.json`）读取问答样本，用 Agent 生成答案并与标准答案对比，LLMJudge 打分，结果写入 `<DATA_ROOT>/eval/report.json`。
 
 仓库根 `justfile` 一键命令：`just web` / `just initdb` / `just eval` / `just backend-format|lint|typecheck` 等。
 

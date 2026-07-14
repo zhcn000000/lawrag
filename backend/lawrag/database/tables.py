@@ -17,7 +17,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declared_attr
 from sqlmodel import Field, SQLModel, col
 
-from lawrag.documents.embedder import EMBEDDING_DIMS
+from lawrag.chat.model import EMBEDDING_DIMS
 
 from .types import BM25Vector, Password
 

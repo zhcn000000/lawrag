@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from pydantic_evals import Case, Dataset
 from pydantic_evals.evaluators import LLMJudge, OutputConfig
 
-from lawrag.chat.model import get_model_settings, model
+from lawrag.chat.agent import get_model_settings, model
 
 evaluators = [
     LLMJudge(

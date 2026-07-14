@@ -6,7 +6,7 @@ from sqlalchemy import cast, func, select
 from sqlalchemy.sql.functions import count
 from sqlmodel import col
 
-from lawrag.documents.embedder import aembed_documents, arerank_documents
+from lawrag.chat.model import aembed_documents, arerank_documents
 from lawrag.documents.models import Document
 from lawrag.documents.tokenizer import atokenize_document
 

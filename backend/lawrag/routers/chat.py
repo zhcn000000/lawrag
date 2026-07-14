@@ -39,7 +39,7 @@ from pydantic_ai import (
 from pydantic_ai.direct import model_request
 from pydantic_ai.messages import is_multi_modal_content
 
-from lawrag.chat.model import agent, get_model_settings
+from lawrag.chat.agent import agent, get_model_settings
 from lawrag.chat.struct import SUBAGENT_REGISTRY, TOOL_REGISTRY, ModelDeps
 from lawrag.database.history import HistoryStore
 

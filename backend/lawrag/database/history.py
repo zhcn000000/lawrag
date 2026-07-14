@@ -25,6 +25,7 @@ class HistoryStore:
     async def aadd_messages(self, messages: Sequence[ModelMessage], session_id: UUID) -> None:
         messages_data = ModelMessagesTypeAdapter.dump_json(list(messages))
         messages_data = json.loads(messages_data)
+        # convert bytes to base64 string through JSON serialization
         async with self.__db.asession() as session:
             stmt = insert(HistoryTable).values(
                 session_id=session_id,
@@ -46,6 +47,7 @@ class HistoryStore:
             all_messages = []
             for row in rows:
                 all_messages.extend(row.messages)
+            # convert base64 string to bytes through JSON deserialization
             all_messages = json.dumps(all_messages)
             return ModelMessagesTypeAdapter.validate_json(all_messages)
 

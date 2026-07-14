@@ -35,7 +35,7 @@ async def evaluate(
 
     dataset = get_dataset(cases=dataset_cases, max_cases=max_cases)
     task = get_task(offline=offline)
-    results = await dataset.evaluate(task=task)
+    results = await dataset.evaluate(task=task, max_concurrency=1)
     reports: list[LawRagCaseReport | LawRagCaseFailure] = []
     for case in results.cases:
         report = LawRagCaseReport(

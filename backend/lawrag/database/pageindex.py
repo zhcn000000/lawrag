@@ -282,8 +282,8 @@ class LawPageIndex:
 
         path 与 abrowse_law 相同, 会自动补全 ``law0/`` 前缀。返回值字段对齐检索结果单条: 面包屑/路径/内容。
         """
-        if not path.startswith("law0/"):
-            path = f"law0/{path.removeprefix('/')}"
+        if path is not None and path != "law0" and not path.startswith("law0/"):
+            path = f"law0/{path.removeprefix('/')}".removesuffix("/")
         async with self.__db.asession() as session:
             node = (
                 (
@@ -315,9 +315,8 @@ class LawPageIndex:
         path: str,
         limit: int = 200,
     ) -> BrowseResultDict:
-        if path is not None and not path.startswith("law0/"):
-            path = path.removeprefix("/")
-            path = f"law0/{path}"
+        if path is not None and path != "law0" and not path.startswith("law0/"):
+            path = f"law0/{path.removeprefix('/')}".removesuffix("/")
         async with self.__db.asession() as session:
             current = (
                 (

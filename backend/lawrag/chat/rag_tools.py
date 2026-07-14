@@ -143,7 +143,7 @@ async def search_documents(
 
 @rag_capability.tool(
     name="get_article_by_path",
-    description="根据层级路径 path 获取该 path 本身对应的法条(或章节)信息。"
+    description="根据层级路径 path 获取该 path 本身对应的法条(或章节)信息。需要输入law_name和path两个参数。"
     "返回 dict，含 law_name/path/content/node_type/number/full_path。",
     prepare=prepare_rag,
     include_return_schema=True,

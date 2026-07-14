@@ -149,7 +149,7 @@ async def aembed_documents(
     headers = {"Content-Type": "application/json"}
     if API_KEY:
         headers["Authorization"] = f"Bearer {API_KEY}"
-    messages = []
+    inputs = []
     for document in documents:
         if isinstance(document, Document):
             text = document.content
@@ -160,16 +160,16 @@ async def aembed_documents(
         content: list[dict] = [{"type": "text", "text": text}]
         if img_url:
             content.append({"type": "image_url", "image_url": {"url": img_url}})
-        messages.append({"role": "user", "content": content})
+        inputs.append(content)
     payload: dict = {
         "model": EMBEDDING_UID,
         "encoding_format": "float",
         "dimensions": EMBEDDING_DIMS,
-        "messages": messages,
+        "inputs": inputs,
     }
 
     async with http_client() as client:
-        results = await client.post(f"{BASE_URL}/embeddings", json=payload, headers=headers)
+        results = await client.post(f"{BASE_URL}/embed", json=payload, headers=headers)
         results.raise_for_status()
     return [obj["embedding"] for obj in results.json()["data"]]
 

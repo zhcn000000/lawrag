@@ -37,7 +37,7 @@ def code_instructions(ctx: RunContext[ModelDeps]) -> str | None:
     name="python_repl",
     description="""这是一个可以执行Python代码的工具，输入Python代码并返回最后一条表达式的结果和控制台输出。
 为了沙盒的安全性，以及沙盒的局限性，该工具不支持部分标准库和所有第三方库的使用，且不支持网络请求。
-其他工具作为同名同参数列表异步函数可以在Python代码中被调用，返回值为工具的返回值。
+其他工具作为同名同参数类型同返回值异步函数可以在Python代码中被调用，
 这个注入只会在名称为python合法标识符时才会成功，并且不允许递归调用python_repl自身。""",
     prepare=prepare_code,
     include_return_schema=True,

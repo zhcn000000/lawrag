@@ -3,7 +3,6 @@ from contextlib import suppress
 from time import sleep
 
 from asyncer import runnify, syncify
-from orjson import dumps, loads
 from pgvector.psycopg.bit import register_bit_info
 from pgvector.psycopg.halfvec import register_halfvec_info
 from pgvector.psycopg.sparsevec import register_sparsevec_info
@@ -12,7 +11,6 @@ from psycopg import AsyncConnection, Connection
 from psycopg.conninfo import make_conninfo
 from psycopg.types import TypeInfo
 from psycopg.types.hstore import register_hstore
-from psycopg.types.json import set_json_dumps, set_json_loads
 from psycopg_pool import AsyncConnectionPool, ConnectionPool
 from sqlalchemy import URL, Engine, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -45,8 +43,6 @@ def register_type(context: Connection) -> None:
         context.adapters.register_loader(info.oid, BM25Loader)
         context.adapters.register_loader(info.array_oid, BM25Loader)
         context.adapters.register_dumper(dict, BM25Dumper.build(info.oid))
-    set_json_loads(loads, context)
-    set_json_dumps(dumps, context)
 
 
 async def register_type_async(context: AsyncConnection) -> None:
@@ -70,8 +66,6 @@ async def register_type_async(context: AsyncConnection) -> None:
         context.adapters.register_loader(info.oid, BM25Loader)
         context.adapters.register_loader(info.array_oid, BM25Loader)
         context.adapters.register_dumper(dict, BM25Dumper.build(info.oid))
-    set_json_loads(loads, context)
-    set_json_dumps(dumps, context)
 
 
 class ConnectionPoolManager:

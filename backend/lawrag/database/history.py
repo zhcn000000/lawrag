@@ -1,8 +1,8 @@
+import json
 from collections.abc import Sequence
 from typing import TypedDict
 from uuid import UUID
 
-import orjson
 from pydantic_ai import ModelMessage, ModelMessagesTypeAdapter
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -24,7 +24,7 @@ class HistoryStore:
 
     async def aadd_messages(self, messages: Sequence[ModelMessage], session_id: UUID) -> None:
         messages_data = ModelMessagesTypeAdapter.dump_json(list(messages))
-        messages_data = orjson.loads(messages_data)
+        messages_data = json.loads(messages_data)
         async with self.__db.asession() as session:
             stmt = insert(HistoryTable).values(
                 session_id=session_id,
@@ -46,7 +46,7 @@ class HistoryStore:
             all_messages = []
             for row in rows:
                 all_messages.extend(row.messages)
-            all_messages = orjson.dumps(all_messages)
+            all_messages = json.dumps(all_messages)
             return ModelMessagesTypeAdapter.validate_json(all_messages)
 
     async def aclear_messages(self, session_id: UUID) -> None:

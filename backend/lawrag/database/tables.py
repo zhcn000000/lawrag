@@ -17,11 +17,11 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declared_attr
 from sqlmodel import Field, SQLModel, col
 
-from lawrag.chat.model import EMBEDDING_DIMS
+from lawrag.chat.model import EMBEDDING_DIM
 
 from .types import BM25Vector, Password
 
-VECTOR_DIM = EMBEDDING_DIMS
+VECTOR_DIM = EMBEDDING_DIM
 
 
 class User(SQLModel, table=True):

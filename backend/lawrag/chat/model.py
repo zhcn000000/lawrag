@@ -32,7 +32,7 @@ API_KEY = settings.LLM_API_KEY
 CHAT_UID = "qwen3.5"
 EMBEDDING_UID = "qwen3-embedding"
 RERANKER_UID = "qwen3-reranker"
-EMBEDDING_DIMS = 4096
+EMBEDDING_DIM = 4096
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -143,9 +143,10 @@ def get_model(
     )
 
 
-# VLLM Cohere Embed Api
+# VLLM Embed Api
 async def aembed_documents(
     documents: Sequence[Document | str],
+    dimension: int = EMBEDDING_DIM,
 ) -> list[Document]:
     headers = {"Content-Type": "application/json"}
     if API_KEY:
@@ -165,7 +166,7 @@ async def aembed_documents(
     payload: dict = {
         "model": EMBEDDING_UID,
         "encoding_format": "float",
-        "dimensions": EMBEDDING_DIMS,
+        "output_dimension": dimension,
         "inputs": inputs,
     }
 
@@ -186,11 +187,11 @@ async def aembed_documents(
     return embedded_docs
 
 
-# VLLM Jina Rerank Api
+# VLLM Rerank Api
 async def arerank_documents(
     query: str,
     documents: Sequence[Document | str],
-    topn: int | None = None,
+    topn: int = 0,
 ) -> list[Document]:
     if not documents:
         return []
@@ -238,6 +239,6 @@ async def arerank_documents(
         reranked_docs.append(doc)
 
     reranked_docs.sort(key=lambda d: d.query_score or 0, reverse=True)
-    if topn is not None:
+    if topn > 0:
         reranked_docs = reranked_docs[:topn]
     return reranked_docs

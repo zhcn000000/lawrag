@@ -1,45 +1,12 @@
 [
 	{
 		"enabled": true,
-		"model": "Qwen/Qwen3.5-122B-A10B-GPTQ-Int4",
-		"model_uid": "qwen3.5",
-		"model_type": "LLM",
-		"gpu_idx": [0, 1, 2, 3, 4, 5, 6, 7],
-		"tool_call_parser": "qwen3_coder",
-		"reasoning_parser": "qwen3",
-		"enable_auto_tool_choice": true,
-		"enable_document_processer": true,
-		"enable_audio_processer": true,
-		"engine_args": {
-			"max_model_len": 262144,
-			"max_num_batched_tokens": 1024,
-			"cudagraph_capture_sizes": [1, 2, 4, 8],
-			"enable_expert_parallel": true,
-			"enable_prefix_caching": true,
-			"all2all_backend": "flashinfer_all2allv",
-			"attention_backend": "FLASHINFER",
-			"mm_encoder_attn_backend": "FLASHINFER",
-			"gpu_memory_utilization": 0.65,
-			"tensor_parallel_size": 8,
-			"limit_mm_per_prompt": {
-				"image": 4,
-				"video": 0
-			},
-			"speculative_config": {
-				"method": "mtp",
-				"num_speculative_tokens": 1
-			}
-		}
-	},
-	{
-		"enabled": true,
 		"model": "Qwen/Qwen3-VL-Embedding-8B",
 		"model_type": "embedding",
 		"model_uid": "qwen3-embedding",
 		"gpu_idx": [4, 5, 6, 7],
 		"engine_args": {
 			"max_model_len": 16384,
-			"max_num_batched_tokens": 256,
 			"cudagraph_capture_sizes": [1, 2, 4],
 			"tensor_parallel_size": 4,
 			"attention_backend": "FLASHINFER",
@@ -52,6 +19,9 @@
 			"limit_mm_per_prompt": {
 				"image": 2,
 				"video": 0
+			},
+			"media_io_kwargs": {
+				"video": { "backend": "torchcodec" }
 			}
 		}
 	},
@@ -63,7 +33,6 @@
 		"gpu_idx": [0, 1, 2, 3],
 		"engine_args": {
 			"max_model_len": 16384,
-			"max_num_batched_tokens": 256,
 			"cudagraph_capture_sizes": [1, 2, 4],
 			"mm_encoder_attn_backend": "FLASHINFER",
 			"attention_backend": "FLASHINFER",
@@ -78,6 +47,44 @@
 			"limit_mm_per_prompt": {
 				"image": 2,
 				"video": 0
+			},
+			"media_io_kwargs": {
+				"video": { "backend": "torchcodec" }
+			}
+		}
+	},
+	{
+		"enabled": true,
+		"model": "Qwen/Qwen3.5-122B-A10B-GPTQ-Int4",
+		"model_uid": "qwen3.5",
+		"model_type": "LLM",
+		"gpu_idx": [0, 1, 2, 3, 4, 5, 6, 7],
+		"tool_call_parser": "qwen3_coder",
+		"reasoning_parser": "qwen3",
+		"enable_auto_tool_choice": true,
+		"enable_document_processer": true,
+		"enable_audio_processer": true,
+		"engine_args": {
+			"max_model_len": 262144,
+			"cudagraph_capture_sizes": [1, 2, 4, 8],
+			"enable_expert_parallel": true,
+			"enable_prefix_caching": true,
+			"all2all_backend": "flashinfer_all2allv",
+			"attention_backend": "FLASHINFER",
+			"mm_encoder_attn_backend": "FLASHINFER",
+			"gpu_memory_utilization": 0.65,
+			"tensor_parallel_size": 8,
+			"decode_context_parallel_size": 4,
+			"limit_mm_per_prompt": {
+				"image": 4,
+				"video": 0
+			},
+			"media_io_kwargs": {
+				"video": { "backend": "torchcodec" }
+			},
+			"speculative_config": {
+				"method": "mtp",
+				"num_speculative_tokens": 1
 			}
 		}
 	}

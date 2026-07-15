@@ -16,10 +16,10 @@ from vllm.entrypoints.openai.completion.protocol import CompletionRequest
 from vllm.entrypoints.openai.engine.protocol import ErrorResponse
 from vllm.entrypoints.openai.responses.protocol import ResponsesRequest
 from vllm.entrypoints.pooling.classify.protocol import ClassificationRequest
-from vllm.entrypoints.pooling.embed.protocol import EmbeddingRequest
+from vllm.entrypoints.pooling.embed.protocol import CohereEmbedRequest, EmbeddingRequest
 from vllm.entrypoints.pooling.pooling.protocol import PoolingRequest
 from vllm.entrypoints.pooling.scoring.protocol import RerankRequest, ScoreRequest
-from vllm.entrypoints.serve.disagg.protocol import GenerateRequest
+from vllm.entrypoints.scale_out.token_in_token_out.protocol import GenerateRequest
 from vllm.entrypoints.serve.tokenize.protocol import (
     DetokenizeRequest,
     TokenizeRequest,
@@ -218,6 +218,23 @@ async def generate(request: GenerateRequest, raw_request: Request):
 async def create_embedding(request: EmbeddingRequest, raw_request: Request):
     try:
         return await model_manager.create_embedding(request, raw_request)
+    except Exception as e:
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail=str(e)) from e
+
+
+@app.post(
+    "/v1/embed",
+    dependencies=[Depends(validate_json_request)],
+    responses={
+        HTTPStatus.BAD_REQUEST.value: {"model": ErrorResponse},
+        HTTPStatus.INTERNAL_SERVER_ERROR.value: {"model": ErrorResponse},
+    },
+)
+@with_cancellation
+@load_aware_call
+async def create_embed(request: CohereEmbedRequest, raw_request: Request):
+    try:
+        return await model_manager.create_embed(request, raw_request)
     except Exception as e:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail=str(e)) from e
 

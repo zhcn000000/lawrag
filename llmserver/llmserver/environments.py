@@ -2,10 +2,8 @@
 
 import os
 from pathlib import Path
-from typing import Annotated
 
 from dotenv import load_dotenv
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,12 +30,13 @@ class EnvironmentSettings(BaseSettings):
     """环境设置."""
 
     # 模型配置文件路径
-    MODEL_CONFIG_PATH: Path = find_project_directory() / "llmserver" / "model_config.yaml"
+    MODEL_CONFIG_PATH: Path = find_project_directory() / "model_config.yaml"
 
     # 服务器配置
-    LLM_HOST: str = "127.0.0.1"
+    LLM_HOST: str = "0.0.0.0"
     LLM_PORT: int = 8000
-    DATA_ROOT: Annotated[Path, Field(alias="LAWRAG_DATA_ROOT")] = find_project_directory() / "data"
+
+    RAG_DATA_ROOT: Path = find_project_directory() / "data"
     SSL_KEY_PATH: Path | None = None
     SSL_CERT_PATH: Path | None = None
     model_config = SettingsConfigDict(env_ignore_empty=True, env_file=env_file, extra="ignore")

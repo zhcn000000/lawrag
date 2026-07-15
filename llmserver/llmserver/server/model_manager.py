@@ -6,7 +6,7 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any
 
-import orjson
+import json
 from anyio import Path as AsyncPath
 from anyio import open_file as aopen
 from fastapi import HTTPException, UploadFile
@@ -30,22 +30,21 @@ from vllm.entrypoints.openai.engine.protocol import (
     RequestResponseMetadata,
     UsageInfo,
 )
-from vllm.entrypoints.openai.engine.serving import OpenAIServing
 from vllm.entrypoints.openai.models.protocol import BaseModelPath
 from vllm.entrypoints.openai.models.serving import OpenAIServingModels
 from vllm.entrypoints.openai.responses.protocol import ResponsesRequest, ResponsesResponse, StreamingResponsesResponse
 from vllm.entrypoints.openai.responses.serving import OpenAIServingResponses
 from vllm.entrypoints.pooling.classify.protocol import ClassificationRequest
 from vllm.entrypoints.pooling.classify.serving import ServingClassification
-from vllm.entrypoints.pooling.embed.protocol import EmbeddingRequest
+from vllm.entrypoints.pooling.embed.protocol import CohereEmbedRequest, EmbeddingRequest
 from vllm.entrypoints.pooling.embed.serving import ServingEmbedding
 from vllm.entrypoints.pooling.pooling.protocol import PoolingRequest
 from vllm.entrypoints.pooling.pooling.serving import ServingPooling
 from vllm.entrypoints.pooling.scoring.protocol import RerankRequest, ScoreRequest
 from vllm.entrypoints.pooling.scoring.serving import ServingScores
-from vllm.entrypoints.serve.disagg.protocol import GenerateRequest, GenerateResponse
-from vllm.entrypoints.serve.disagg.serving import ServingTokens
-from vllm.entrypoints.serve.render.serving import OpenAIServingRender
+from vllm.entrypoints.scale_out.token_in_token_out.protocol import GenerateRequest, GenerateResponse
+from vllm.entrypoints.scale_out.token_in_token_out.serving import ServingTokens
+from vllm.entrypoints.serve.engine.serving import BaseServing
 from vllm.entrypoints.serve.tokenize.protocol import (
     DetokenizeRequest,
     DetokenizeResponse,
@@ -66,6 +65,7 @@ from vllm.entrypoints.speech_to_text.translation.protocol import (
     TranslationResponseVerbose,
 )
 from vllm.entrypoints.speech_to_text.translation.serving import OpenAIServingTranslation
+from vllm.renderers.online_renderer import OnlineRenderer
 from vllm.v1.engine.async_llm import AsyncLLM
 
 from .media_processer import audio_processer, document_processer, image_processer
@@ -88,7 +88,7 @@ class HandleType(BaseModel):
     tokenize: ServingTokenization | None = None
     pooling: ServingPooling | None = None
     models: OpenAIServingModels | None = None
-    render: OpenAIServingRender | None = None
+    render: OnlineRenderer | None = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -140,8 +140,8 @@ class ModelManager:
         async with await aopen(config_path_obj, "rb") as f:
             try:
                 json_content = await f.read()
-                launch_specs = orjson.loads(json_content)
-            except orjson.JSONDecodeError as e:
+                launch_specs = json.loads(json_content)
+            except json.JSONDecodeError as e:
                 msg = f"解析模型配置 JSON 失败: {e}"
                 raise ValueError(msg) from e
 
@@ -276,11 +276,10 @@ class ModelManager:
             base_model_paths=base_model_paths,
         )
 
-        # 创建 OpenAIServingRender (vLLM 0.20+ requires this for all generate-serving classes)
-        handle.render = OpenAIServingRender(
+        # 创建 OnlineRenderer (vLLM 0.25+ requires this for all generate-serving classes)
+        handle.render = OnlineRenderer(
             model_config=engine.model_config,
             renderer=engine.renderer,
-            model_registry=handle.models.registry,
             request_logger=logger,
             chat_template=chat_template_config.chat_template,
             chat_template_content_format=chat_template_config.chat_template_content_format,
@@ -296,7 +295,7 @@ class ModelManager:
         # 创建 tokenization handler
         handle.tokenize = ServingTokenization(
             models=handle.models,
-            openai_serving_render=handle.render,
+            online_renderer=handle.render,
             request_logger=logger,
             chat_template=chat_template_config.chat_template,
             chat_template_content_format=chat_template_config.chat_template_content_format,
@@ -315,6 +314,7 @@ class ModelManager:
             )
 
         # 创建 generate 相关 handlers
+        enable_auto_tools = False
         if "generate" in support_tasks:
             enable_auto_tools = spec.get("enable_auto_tool_choice")
             if enable_auto_tools is None:
@@ -326,7 +326,7 @@ class ModelManager:
                 engine_client=engine,
                 models=handle.models,
                 response_role=spec.get("response_role", "assistant"),
-                openai_serving_render=handle.render,
+                online_renderer=handle.render,
                 request_logger=logger,
                 chat_template=chat_template_config.chat_template,
                 chat_template_content_format=chat_template_config.chat_template_content_format,
@@ -343,7 +343,7 @@ class ModelManager:
             handle.response = OpenAIServingResponses(
                 engine_client=engine,
                 models=handle.models,
-                openai_serving_render=handle.render,
+                online_renderer=handle.render,
                 request_logger=logger,
                 chat_template=chat_template_config.chat_template,
                 chat_template_content_format=chat_template_config.chat_template_content_format,
@@ -358,7 +358,7 @@ class ModelManager:
             handle.completion = OpenAIServingCompletion(
                 engine_client=engine,
                 models=handle.models,
-                openai_serving_render=handle.render,
+                online_renderer=handle.render,
                 request_logger=logger,
                 return_tokens_as_token_ids=spec.get("return_tokens_as_token_ids", False),
                 enable_prompt_tokens_details=spec.get("enable_prompt_tokens_details", True),
@@ -368,7 +368,7 @@ class ModelManager:
                 engine_client=engine,
                 models=handle.models,
                 response_role=spec.get("response_role", "assistant"),
-                openai_serving_render=handle.render,
+                online_renderer=handle.render,
                 request_logger=logger,
                 chat_template=chat_template_config.chat_template,
                 chat_template_content_format=chat_template_config.chat_template_content_format,
@@ -381,7 +381,7 @@ class ModelManager:
             handle.tokens = ServingTokens(
                 engine_client=engine,
                 models=handle.models,
-                openai_serving_render=handle.render,
+                online_renderer=handle.render,
                 request_logger=logger,
                 return_tokens_as_token_ids=spec.get("return_tokens_as_token_ids", False),
                 enable_prompt_tokens_details=spec.get("enable_prompt_tokens_details", True),
@@ -560,6 +560,21 @@ class ModelManager:
     async def create_embedding(
         self,
         request: EmbeddingRequest,
+        raw_request: Request | None = None,
+    ) -> Response:
+        model = request.model
+        if not model or model not in self.models:
+            raise HTTPException(404, f"模型 {model} 未找到")
+
+        server = self.models[model].handle.embedding
+        if server is None:
+            raise HTTPException(404, "模型不支持该接口")
+
+        return await server(request, raw_request)
+
+    async def create_embed(
+        self,
+        request: CohereEmbedRequest,
         raw_request: Request | None = None,
     ) -> Response:
         model = request.model
@@ -792,7 +807,7 @@ class ModelManager:
         engine = self.models[model].engine
         if engine is None:
             raise HTTPException(404, "模型不支持该接口")
-        request_id = f"ocr-{OpenAIServing._base_request_id(raw_request)}"
+        request_id = f"ocr-{BaseServing._base_request_id(raw_request)}"
         prompt = TextPrompt(
             prompt=request.prompt or "<image>\nDo OCR",
             multi_modal_data={"image": image_data},

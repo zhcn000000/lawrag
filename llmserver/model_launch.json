@@ -7,12 +7,11 @@
 		"gpu_idx": [4, 5, 6, 7],
 		"engine_args": {
 			"max_model_len": 16384,
-			"cudagraph_capture_sizes": [1, 2, 4],
 			"tensor_parallel_size": 4,
+			"all2all_backend": "flashinfer_all2allv",
 			"attention_backend": "FLASHINFER",
 			"mm_encoder_attn_backend": "FLASHINFER",
 			"gpu_memory_utilization": 0.25,
-			"all2all_backend": "flashinfer_all2allv",
 			"hf_overrides": {
 				"is_matryoshka": true
 			},
@@ -33,12 +32,11 @@
 		"gpu_idx": [0, 1, 2, 3],
 		"engine_args": {
 			"max_model_len": 16384,
-			"cudagraph_capture_sizes": [1, 2, 4],
+			"all2all_backend": "flashinfer_all2allv",
 			"mm_encoder_attn_backend": "FLASHINFER",
 			"attention_backend": "FLASHINFER",
 			"tensor_parallel_size": 4,
 			"gpu_memory_utilization": 0.25,
-			"all2all_backend": "flashinfer_all2allv",
 			"hf_overrides": {
 				"architectures": ["Qwen3VLForSequenceClassification"],
 				"classifier_from_token": ["no", "yes"],
@@ -66,8 +64,6 @@
 		"enable_audio_processer": true,
 		"engine_args": {
 			"max_model_len": 262144,
-			"cudagraph_capture_sizes": [1, 2, 4, 8],
-			"enable_expert_parallel": true,
 			"enable_prefix_caching": true,
 			"all2all_backend": "flashinfer_all2allv",
 			"attention_backend": "FLASHINFER",

@@ -8,6 +8,8 @@ readme = "README.md"
 dependencies = [
   "torch==2.11.0+cu130",
   "torchvision==0.26.0+cu130",
+  "torchcodec==0.14.0+cu130",
+  "torchaudio==2.11.0+cu130",
   "fastapi[standard]>=0.119.1",
   "uvicorn[standard]>=0.32.0",
   "pydantic>=2.12.3",
@@ -78,6 +80,8 @@ module_name = "llmserver"
 flashinfer-jit-cache = { index = "flashinfer" }
 torch = { index = "pytorch" }
 torchvision = { index = "pytorch" }
+torchcodec = { index = "pytorch" }
+torchaudio = { index = "pytorch" }
 
 [tool.ruff]
 line-length = 120

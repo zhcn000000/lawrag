@@ -1613,6 +1613,8 @@ dependencies = [
     { name = "rich" },
     { name = "torch" },
     { name = "torch-c-dlpack-ext" },
+    { name = "torchaudio" },
+    { name = "torchcodec" },
     { name = "torchvision" },
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
@@ -1646,6 +1648,8 @@ requires-dist = [
     { name = "rich" },
     { name = "torch", specifier = "==2.11.0+cu130", index = "https://mirrors.nju.edu.cn/pytorch/whl/cu130" },
     { name = "torch-c-dlpack-ext", specifier = ">=0.1.3" },
+    { name = "torchaudio", specifier = "==2.11.0+cu130", index = "https://mirrors.nju.edu.cn/pytorch/whl/cu130" },
+    { name = "torchcodec", specifier = "==0.14.0+cu130", index = "https://mirrors.nju.edu.cn/pytorch/whl/cu130" },
     { name = "torchvision", specifier = "==0.26.0+cu130", index = "https://mirrors.nju.edu.cn/pytorch/whl/cu130" },
     { name = "typer", specifier = ">=0.21.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
@@ -4085,31 +4089,27 @@ wheels = [
 
 [[package]]
 name = "torchaudio"
-version = "2.11.0"
-source = { registry = "https://mirrors.ustc.edu.cn/pypi/simple" }
+version = "2.11.0+cu130"
+source = { registry = "https://mirrors.nju.edu.cn/pytorch/whl/cu130" }
 wheels = [
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/39/fe/ffa618b4f0d9732d7df7a2fa2bd48657d896599bc224e5af3c70d46c546b/torchaudio-2.11.0-cp314-cp314-macosx_12_0_arm64.whl", hash = "sha256:cc09cd1f6015b8549e7fe255fb1be5346b57e7fee06541d3f3dbb012d8c4715f", size = 679901, upload-time = "2026-03-23T18:13:25.472Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/5c/54/f414d7b92dd0b3094a2409c95a97bd6c49aa0620da722a0e55462f9bd9cb/torchaudio-2.11.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:79fb3cb99169fd41bd9719647261402a164da0d105a4d81f42a3260844ec5e79", size = 1618527, upload-time = "2026-03-23T18:13:26.68Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/a8/a8/bf2e1f6ce24c990192400ae49b4acc1a0d0295b6c6a06bceecdc46ce08de/torchaudio-2.11.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:00e9f71ab9c656f0abdb40c515bd65d4658ab0ad380dee27a2efd7d51dabd3d6", size = 1771995, upload-time = "2026-03-23T18:13:23.373Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/83/6f/b0efb44e0bfe8dd4d78d76ae3be280354e1fb5c8631c782785d74cd8a7b1/torchaudio-2.11.0-cp314-cp314-win_amd64.whl", hash = "sha256:1424638adb8bb40087bc7b6eb103e8e4fe398210f09076f33b7b5e61501b5d66", size = 328662, upload-time = "2026-03-23T18:13:32.243Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/60/84/1c792b0b700eac9a96772cfd9f96c097b17bca3234a2fde3c64b8063660d/torchaudio-2.11.0-cp314-cp314t-macosx_12_0_arm64.whl", hash = "sha256:da2725e250866da42a12934c9a6552f65a18b7187fd7a6221387f0e605fb3b96", size = 679926, upload-time = "2026-03-23T18:13:24.452Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/9a/a0/62a5842062f739239691f2e57523e0570dd06704ad987755f7644a3afa23/torchaudio-2.11.0-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:1be3767064364ae82705bdf2b15c1e8b41fea82c4cd04d47428a8684b634b6ed", size = 1618552, upload-time = "2026-03-23T18:13:21.09Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/6d/89/c293d818f9f899db93bf291b42401c05ae29acfb2e53d5341c30ea703e62/torchaudio-2.11.0-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:67f6edac29ed004652c11db5c19d9debb5d835695930574f564efc8bdd061bba", size = 1771986, upload-time = "2026-03-23T18:13:22.153Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/93/f7/ee5da8c03f1a3c7662c6c6a119f24a4b3e646da94be56dce3201e3a6ee9b/torchaudio-2.11.0-cp314-cp314t-win_amd64.whl", hash = "sha256:88fb5e29f670a33d9bac6aabb1d2734460cf6e461bde5cdc352826035851b16d", size = 328661, upload-time = "2026-03-23T18:13:20.1Z" },
+    { url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130/torchaudio-2.11.0%2Bcu130-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:0a36531ffb90f0b1870e994bc57643bf6466fd8c290b5b9b2b36dadc3445d0c0", upload-time = "2026-03-23T15:50:26Z" },
+    { url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130/torchaudio-2.11.0%2Bcu130-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:378b49671b581114a2d25d40928f12a150872feadf11669a63f573e81c78019a", upload-time = "2026-03-23T15:50:26Z" },
+    { url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130/torchaudio-2.11.0%2Bcu130-cp314-cp314-win_amd64.whl", hash = "sha256:b345401d76a371031b2fe965bd9579b9621c9d87902ee3e586be665df04c179e", upload-time = "2026-03-23T15:50:26Z" },
+    { url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130/torchaudio-2.11.0%2Bcu130-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:94e90c94c93a626e21686c3dc76d4597c3e4ad178a911611fed4f14c8de07293", upload-time = "2026-03-23T15:50:26Z" },
+    { url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130/torchaudio-2.11.0%2Bcu130-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:1cef8561494c44b12eb6a390d9f2ff52f6fa540b9a7aba6c8951c074056a2f11", upload-time = "2026-03-23T15:50:26Z" },
+    { url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130/torchaudio-2.11.0%2Bcu130-cp314-cp314t-win_amd64.whl", hash = "sha256:ac4988a74921500f9f2dc6502867876bf1bf15d845a518f4711d21ec81a1efef", upload-time = "2026-03-23T15:50:26Z" },
 ]
 
 [[package]]
 name = "torchcodec"
-version = "0.15.0"
-source = { registry = "https://mirrors.ustc.edu.cn/pypi/simple" }
+version = "0.14.0+cu130"
+source = { registry = "https://mirrors.nju.edu.cn/pytorch/whl/cu130" }
 wheels = [
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/74/9a/e1e2724334ffdc2ae86db067e13bd931ae87db82807d99136b295ac78d68/torchcodec-0.15.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:3b81d9d522d74981e97754e43f29c0d1f351e122f16135d390ad00023ff6535d", size = 4665176, upload-time = "2026-07-15T10:14:18.219Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/b0/07/cbb4a059307fa19fd96aafeb0fd35aeed15bbbff1a7872000734e35c8411/torchcodec-0.15.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:24e8e6a1824cc13986fe678f91b07ac199d19dbc5f2af39decc4966d957b42f5", size = 2732210, upload-time = "2026-07-15T10:14:19.711Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/28/57/4bab825dbb8aff755c87ff040fd91e6dbc1bb7c51a9bd5b2fdd61fda0437/torchcodec-0.15.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:b8b0b5b293024e0753455fa141522db794a72ae7b8e1d0a750db5756704ca6ea", size = 2990822, upload-time = "2026-07-15T10:14:21.263Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/cb/95/71aa2910875c806e2979390bfd5bef8b4689218389a79d707ac30582c755/torchcodec-0.15.0-cp314-cp314-win_amd64.whl", hash = "sha256:0cd15a402189953ae9a68854690b53acb72c7b9ba4d9bacb18ce9b654069cb16", size = 3244867, upload-time = "2026-07-15T10:14:22.835Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/de/89/e500933ee68799a30b7573c06ed7165a1dfaba12672550bc3d2e9493fb23/torchcodec-0.15.0-cp314-cp314t-macosx_14_0_arm64.whl", hash = "sha256:24285627a70a935d07322342ab5d92c30bb2d37bcc9ccebacee4b23ec0e3a3c7", size = 4754950, upload-time = "2026-07-15T10:14:24.236Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/db/81/cd76bac5183bdcc467f51815d9cf1405bb38a90804b217ce574ac3466162/torchcodec-0.15.0-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:672aea29b5d9c56dc023e366f40ec4168bfd52f2ac02cf1c07430ad6560fdbe7", size = 2742044, upload-time = "2026-07-15T10:14:25.553Z" },
-    { url = "https://mirrors.ustc.edu.cn/pypi/packages/1c/72/8ab2b9dcd27c1ca7b5c66a6b33fa9acd5cd0cefcc3e778736f8d8a725e9e/torchcodec-0.15.0-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:7d96bc899819d975db3a38164f4253620fd5683a3b0d447a840cdb6cb091332e", size = 2994598, upload-time = "2026-07-15T10:14:26.991Z" },
+    { url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130/torchcodec-0.14.0%2Bcu130-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:d0a938236825a3b9e970d958466e92d5546cad9c7dcfd580151b20bdf1580df3", upload-time = "2026-06-03T12:39:05Z" },
+    { url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130/torchcodec-0.14.0%2Bcu130-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:e7f2e1c95854e4c0f39f0279d95c71c1810b0bf2e91e820ebc959a103bdb29aa", upload-time = "2026-06-03T12:39:05Z" },
+    { url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130/torchcodec-0.14.0%2Bcu130-cp314-cp314-win_amd64.whl", hash = "sha256:26ed40fc26287e6d6f65268fdaf29017aee803763077e0746aa85fb8cd6a697b", upload-time = "2026-06-03T12:39:05Z" },
+    { url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130/torchcodec-0.14.0%2Bcu130-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:2f293c81d042bb2f88c2242f654bffb2a084b9e3cd32d6a311500dc6ba6bb40c", upload-time = "2026-06-03T12:39:05Z" },
+    { url = "https://mirrors.nju.edu.cn/pytorch/whl/cu130/torchcodec-0.14.0%2Bcu130-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:54e282e1b090bf1ea7da4f29317a1eecb3b21ed8d798b5d67601ad20be34c45d", upload-time = "2026-06-03T12:39:05Z" },
 ]
 
 [[package]]

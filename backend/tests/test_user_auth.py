@@ -46,10 +46,8 @@ def test_get_current_user_rejects_invalid_token():
 
 @pytest.fixture(scope="module")
 def client():
+    from lawrag.routers import app  # ruff:ignore[unsorted-imports, import-outside-top-level]  # to map httpx -> httpx2
     from fastapi.testclient import TestClient
-
-    import lawrag  # ruff:ignore[unused-import]  # remaps httpx2 -> httpx for TestClient
-    from lawrag.routers import app
 
     with TestClient(app) as test_client:
         yield test_client

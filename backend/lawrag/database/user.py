@@ -3,7 +3,7 @@ from typing import TypedDict
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -17,7 +17,18 @@ from .tables import User
 ALGORITHM = "HS256"
 TOKEN_EXPIRES_IN = settings.TOKEN_EXPIRES_IN
 
-oauth2_schema = OAuth2PasswordBearer(tokenUrl="/api/login", refreshUrl="/api/refresh")
+
+class OAuth2MultiBearer(OAuth2PasswordBearer):
+    async def __call__(self, request: Request) -> str | None:
+        token = await super().__call__(request)
+        if token is None:
+            token = request.cookies.get("lawrag_token")
+        # if token is None:
+        #     token = request.query_params.get("token")
+        return token
+
+
+oauth2_schema = OAuth2MultiBearer(tokenUrl="/api/login", refreshUrl="/api/refresh")
 
 
 class TokenDataDict(TypedDict):

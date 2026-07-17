@@ -6,7 +6,7 @@ from typing import TypedDict
 from uuid import UUID, uuid7
 
 from anyio import Path as AsyncPath
-from sqlalchemy import delete, exists, select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.sql.functions import count
 from sqlmodel import col
@@ -196,8 +196,9 @@ class DocumentStore:
             async with self.__db.asession() as session:
                 stmt = (
                     select(LawNode)
+                    .outerjoin(DocumentTable, col(DocumentTable.node_id) == col(LawNode.id))
                     .where(col(LawNode.node_type).in_(EMBEDDABLE_NODE_TYPES))
-                    .where(~exists(select(1).where(col(DocumentTable.node_id) == col(LawNode.id))))
+                    .where(col(DocumentTable.node_id).is_(None))
                 )
                 if law_name is not None:
                     stmt = stmt.where(col(LawNode.law_name) == law_name)

@@ -115,16 +115,22 @@ class RAGSearch:
             result = await session.execute(stmt)
             rows = result.scalars().all()
 
-            node_ids = [row.node_id for row in rows if row.node_id is not None]
             node_map: dict[UUID, LawNode] = {}
-            pending: set[UUID] = set(node_ids)
-            while pending:
-                node_rows = (await session.execute(select(LawNode).where(col(LawNode.id).in_(pending)))).scalars().all()
-                pending = set()
-                for node in node_rows:
-                    node_map[node.id] = node
-                    if node.parent_id is not None and node.parent_id not in node_map:
-                        pending.add(node.parent_id)
+            if node_ids := [row.node_id for row in rows if row.node_id is not None]:
+                node_cte = select(col(LawNode.id)).where(col(LawNode.id).in_(set(node_ids))).cte(recursive=True)
+                node_cte = node_cte.union_all(
+                    select(col(LawNode.id)).where(col(LawNode.parent_id) == node_cte.c.id),
+                )
+                node_rows = (
+                    (
+                        await session.execute(
+                            select(LawNode).where(col(LawNode.id).in_(select(node_cte.c.id))),
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                node_map = {node.id: node for node in node_rows}
             documents: list[Document] = []
             for row in rows:
                 node = node_map.get(row.node_id) if row.node_id is not None else None

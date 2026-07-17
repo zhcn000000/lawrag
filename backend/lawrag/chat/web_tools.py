@@ -84,7 +84,7 @@ async def search_web(
 
 @web_capability.tool(
     name="fetch_web",
-    description="获取网页原始内容工具，输入网页URL，返回网页的内容。",
+    description="获取网页原始内容工具，输入网页URL，返回网页的内容。禁止重定向",
     prepare=prepare_web,
     include_return_schema=True,
 )
@@ -94,8 +94,9 @@ async def fetch_web(
     content_type: Annotated[
         str | None,
         Field(
-            description="指定返回内容类型: text/html, application/json, text/plain, application/octet-stream等，"
-            "未指定则从链接url后缀或返回body的Content-Type中推断",
+            description="""指定返回内容类型: text/html, application/json, text/plain, image/png 等，
+    未指定则从链接url后缀或返回body的Content-Type中推断，通常可不指定，仅在无法自动推断时指定。
+    text/html会自动提取正文，如需网页原始内容可以通过指定的返回类型为text/plain来跳过解析（不推荐），其他会自动解析的类型同理""",
         ),
     ] = None,
 ) -> str | BinaryContent:
@@ -113,7 +114,7 @@ async def fetch_web(
             if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
                 raise ModelRetry("不允许访问内网地址")
 
-        async with AsyncClient() as client:
+        async with AsyncClient(follow_redirects=False) as client:
             response = await client.get(url)
             response.raise_for_status()
 

@@ -111,7 +111,13 @@ select = [
   "FURB",
   "PTH",
 ]
-ignore = ["PLR", "PLC0415", "PLW0603", "PLW3201", "PLW0717"]
+ignore = [
+  "PLR",
+  "import-outside-top-level",
+  "global-statement",
+  "bad-dunder-method-name",
+  "too-many-statements-in-try-clause",
+]
 fixable = ["ALL"]
 
 [tool.ruff.format]

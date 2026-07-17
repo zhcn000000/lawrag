@@ -1,13 +1,11 @@
 import logging
 
-from anyio import Path as AsyncPath
 from fastapi import APIRouter
 from pydantic import TypeAdapter
 
-from lawrag.database.document import DocumentStore
 from lawrag.database.pageindex import LawPageIndex
 from lawrag.database.ragsearch import RAGSearch
-from lawrag.routers.schema import LawInfoItem, PageIndexImportResultItem, SearchItem, TocEntryItem
+from lawrag.routers.schema import LawInfoItem, SearchItem, TocEntryItem
 
 from .schema import (
     LawArticleDetailResponse,
@@ -15,8 +13,6 @@ from .schema import (
     LawArticleResponse,
     LawListResponse,
     LawTocResponse,
-    PageIndexImportRequest,
-    PageIndexImportResponse,
     SearchRequest,
     SearchResponse,
 )
@@ -49,30 +45,6 @@ async def api_search(request: SearchRequest) -> SearchResponse:
     except Exception as e:
         logger.exception("Search failed")
         return SearchResponse(success=False, status=f"搜索失败: {e!s}", results=[])
-
-
-@router.post("/pageindex/import")
-async def api_pageindex_import(request: PageIndexImportRequest) -> PageIndexImportResponse:
-    try:
-        docstore = DocumentStore()
-        path = request.path
-
-        p = AsyncPath(path)
-        if await p.is_dir():
-            results = await docstore.aimport_from_dir(dir_path=path)
-        else:
-            result = await docstore.aimport_file(file_path=path)
-            results = [result]
-        results = TypeAdapter(list[PageIndexImportResultItem]).validate_python(results)
-        total = sum(r.count for r in results)
-        return PageIndexImportResponse(
-            success=True,
-            status=f"导入完成, 共 {total} 条法条",
-            results=results,
-        )
-    except Exception as e:
-        logger.exception("Page index import failed")
-        return PageIndexImportResponse(success=False, status=f"导入失败: {e!s}", results=[])
 
 
 @router.get("/pageindex/laws")

@@ -1,7 +1,7 @@
 import sys
 
 # for compatibility with httpx
-import httpx2  # noqa: F401
+import httpx2  # ruff:ignore[unused-import]
 
 sys.modules["httpx"] = sys.modules["httpx2"]
 for name, module in list(sys.modules.items()):

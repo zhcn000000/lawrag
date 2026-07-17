@@ -5,7 +5,7 @@ from pydantic_ai.retries import RetryConfig
 from pydantic_evals import Case
 from tenacity import stop_after_attempt
 
-from lawrag.chat.agent import agent
+from lawrag.chat.agent import agent, get_model_settings
 from lawrag.chat.struct import ModelDeps
 
 from .dataset import LawRagCase, LawRagCaseFailure, LawRagCaseReport, get_dataset
@@ -19,21 +19,24 @@ def get_task(offline: bool = False) -> Callable[[str], Awaitable[str]]:
         deps.select_toolset = deps.select_toolset - {"code_toolkit"}
         if offline:
             deps.select_toolset = deps.select_toolset - {"web_toolkit"}
-        result = await agent.run(text, deps=deps)
-        logger.info(f"Evaluating case: {text}\nModel output: {result.output}")
+        result = await agent.run(text, deps=deps, model_settings=get_model_settings(thinking=True))
+        logger.info("Evaluating case: %s Model output: %s", text, result.output)
         anwser = result.output
         retries = 0
         while (
             ("<tool_call>" in anwser and "</tool_call>" in anwser)
             or ("<tool_code>" in anwser and "</tool_code>" in anwser)
         ) and retries < 3:
-            logger.warning(f"Model Tool Call Failed, Attempt {retries + 1}")
+            logger.warning("Model Tool Call Failed, Attempt %s", retries + 1)
             message_history = result.all_messages()
             result = await agent.run(
-                "工具调用未被正确解析，请使用标准工具调用格式，继续", deps=deps, message_history=message_history
+                "工具调用未被正确解析，请使用标准工具调用格式，继续",
+                deps=deps,
+                message_history=message_history,
+                model_settings=get_model_settings(thinking=True),
             )
             anwser = result.output
-            logger.info(f"Evaluating case: {text}\nRetries: {retries}\nModel output: {anwser}")
+            logger.info("Evaluating case: %s Retries: %s Model output: %s", text, retries, anwser)
             retries += 1
         return anwser
 

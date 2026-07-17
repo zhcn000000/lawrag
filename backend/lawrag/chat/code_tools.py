@@ -3,6 +3,7 @@ from collections.abc import Callable
 from typing import Annotated, Any, Literal
 from uuid import uuid7
 
+from anyio import move_on_after
 from pydantic import Field, TypeAdapter
 from pydantic_ai import ModelRetry, RunContext, ToolDefinition
 from pydantic_ai.capabilities import Capability
@@ -45,8 +46,11 @@ def code_instructions(ctx: RunContext[ModelDeps]) -> str | None:
 async def python_repl(
     ctx: RunContext[ModelDeps],
     code: Annotated[str, Field(description="要执行的Python代码")],
+    max_execution_time: Annotated[int, Field(description="最大执行时间，单位为秒", ge=1, le=300)] = 30,
 ) -> Annotated[str, Field(description="返回最后一行表达式的结果和控制台输出")]:
     try:
+        if max_execution_time < 1 or max_execution_time > 300:
+            raise ModelRetry("最大执行时间必须在1到300秒之间。")
         monty = Monty(code=code)
         out: list[str] = []
 
@@ -55,15 +59,19 @@ async def python_repl(
                 out.append(content)
 
         external_functions = _build_external_functions(ctx)
-
-        result = await monty.run_async(
-            external_functions=external_functions,
-            print_callback=print_callback,
-        )
+        with move_on_after(max_execution_time) as scope:
+            result = await monty.run_async(
+                external_functions=external_functions,
+                print_callback=print_callback,
+            )
+        if scope.cancel_called:
+            raise ModelRetry("Python代码执行超时，请检查代码是否有无限循环或长时间运行的操作。")
         output = "表达式结果: " + pretty_repr(result)
         if out:
             output += "\n输出:\n" + "".join(out)
         return output
+    except ModelRetry:
+        raise
     except Exception as e:
         raise ModelRetry(f"执行Python代码时发生错误: {e}") from e
 

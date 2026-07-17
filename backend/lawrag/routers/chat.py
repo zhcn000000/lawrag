@@ -125,7 +125,7 @@ def _resolve_user_content(
     return text or None, files or None
 
 
-# ruff: noqa: ASYNC119
+# ruff:file-ignore[yield-in-context-manager-in-async-generator]
 @router.post("/{session_id}/stream")
 async def api_chat(
     session_id: UUID,

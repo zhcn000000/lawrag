@@ -51,7 +51,7 @@ class EnvironmentSettings(BaseSettings):  # pyright: ignore
 
     @computed_field
     @property
-    def POSTGRES_DSN(self) -> PostgresDsn:  # noqa: N802
+    def POSTGRES_DSN(self) -> PostgresDsn:  # ruff:ignore[invalid-function-name]
         return PostgresDsn.build(
             scheme="postgresql+psycopg",
             username=self.POSTGRES_USER,
@@ -63,7 +63,7 @@ class EnvironmentSettings(BaseSettings):  # pyright: ignore
 
     @computed_field
     @property
-    def LLM_LINK(self) -> HttpUrl:  # noqa: N802
+    def LLM_LINK(self) -> HttpUrl:  # ruff:ignore[invalid-function-name]
         return HttpUrl.build(
             scheme=self.LLM_PROTOCOL,
             host=self.LLM_HOST,

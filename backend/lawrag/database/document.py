@@ -189,7 +189,6 @@ class DocumentStore:
         chunk_overlap: int = 128,
         batch_size: int = 64,
     ) -> EmbedResultDict:
-        offset = 0
         total_nodes = 0
         total_chunks = 0
 
@@ -202,7 +201,7 @@ class DocumentStore:
                 )
                 if law_name is not None:
                     stmt = stmt.where(col(LawNode.law_name) == law_name)
-                stmt = stmt.order_by(col(LawNode.law_name), col(LawNode.id)).offset(offset).limit(batch_size)
+                stmt = stmt.order_by(col(LawNode.law_name), col(LawNode.id)).limit(batch_size)
 
                 result = await session.execute(stmt)
                 rows = result.scalars().all()
@@ -224,7 +223,6 @@ class DocumentStore:
                 logger.exception("Failed to embed batch of %d nodes for %s", len(rows), law_name)
                 continue
 
-            offset += batch_size
             logger.info("Embedded %s: %d nodes so far...", law_name, total_nodes)
 
         logger.info("Embedded %s: %d nodes, %d chunks total", law_name, total_nodes, total_chunks)

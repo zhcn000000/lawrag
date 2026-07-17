@@ -100,7 +100,13 @@ class DocumentStore:
         ]
 
         async with self.__db.asession() as session:
-            await session.execute(delete(LawNode).where(col(LawNode.law_name) == law_name))
+            existing_stmt = select(LawNode).where(col(LawNode.law_name) == law_name).limit(1)
+            existing_result = await session.execute(existing_stmt)
+            existing_row = existing_result.scalar_one_or_none()
+            if existing_row is not None:
+                logger.info("Law %s already exists in database, skipping import", law_name)
+                return ImportResultDict(file=law_name, status="exists", count=articles, inserted=0)
+
             stmt = (
                 insert(LawNode)
                 .values(values)

@@ -12,7 +12,6 @@ class LawIndexItem(Item):
     law_type: Field = Field()
     status: Field = Field()
     detail_url: Field = Field()
-    category: Field = Field()
     index_number: Field = Field()
 
 

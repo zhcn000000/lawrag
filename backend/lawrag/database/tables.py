@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -6,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     ForeignKey,
     Index,
     Integer,
@@ -161,6 +163,32 @@ class LawNode(SQLModel, table=True):
                 unique=True,
             ),
         )
+
+
+class LawIndex(SQLModel, table=True):
+    __tablename__ = "law_index"  # pyright: ignore
+
+    id: Annotated[
+        UUID,
+        Field(
+            sa_column=Column(
+                Uuid[UUID](native_uuid=True, as_uuid=True),
+                primary_key=True,
+                server_default=func.uuidv7(),
+            ),
+        ),
+    ]
+    law_id: Annotated[str, Field(sa_column=Column(String(64), unique=True, nullable=False, index=True))]
+    law_name: Annotated[str, Field(sa_column=Column(String(512), nullable=False, index=True))]
+    office: Annotated[str, Field(sa_column=Column(String(256), nullable=False))]
+    publish_date: Annotated[date | None, Field(sa_column=Column(Date, nullable=True))]
+    expiry_date: Annotated[date | None, Field(sa_column=Column(Date, nullable=True))]
+    law_type: Annotated[str, Field(sa_column=Column(String(64), nullable=False))]
+    status: Annotated[str, Field(sa_column=Column(String(16), nullable=False))]
+    detail_url: Annotated[str, Field(sa_column=Column(String(512), nullable=False))]
+    index_number: Annotated[str, Field(sa_column=Column(String(16), nullable=False))]
+    raw: Annotated[str | None, Field(sa_column=Column(Text, nullable=True))]
+    structured: Annotated[dict | None, Field(sa_column=Column(JSONB, nullable=True))]
 
 
 class DocumentTable(SQLModel, table=True):

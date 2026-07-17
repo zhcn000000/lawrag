@@ -114,9 +114,14 @@ class UserManager:
             stmt = update(User).where(col(User.id) == user_id).values(**updated_data)
             await session.execute(stmt)
 
-    async def alists(self) -> dict[str, UserInfoDict]:
+    async def alists(self, limit: int | None = None, offset: int | None = None) -> dict[str, UserInfoDict]:
         async with self.__db.asession() as session:
             stmt = select(User)
+            if limit is not None:
+                stmt = stmt.limit(limit)
+            if offset is not None:
+                stmt = stmt.offset(offset)
+            stmt = stmt.order_by(col(User.username))
             result = await session.execute(stmt)
             users = result.scalars().all()
             return {

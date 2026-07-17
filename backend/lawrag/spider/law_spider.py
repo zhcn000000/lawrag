@@ -152,7 +152,6 @@ class LawIndexSpider(Spider):
                 law_type=entry.get("flxz", ""),
                 status=status,
                 detail_url=f"{DETAIL_BASE_URL}/detail2.html?{bbbs}" if bbbs else "",
-                category=self._category,
                 index_number=str((page - 1) * PAGE_SIZE + idx + 1),
             )
 

@@ -10,11 +10,14 @@ from anyio import Path as AsyncPath
 from scrapy import Request, Spider
 from scrapy.http.response import Response
 
+from lawrag.database.law_index import LawIndexManager
 from lawrag.spider.items import LawDownloadItem
 
 logger = logging.getLogger(__name__)
 
 DOWNLOAD_API = "https://flk.npc.gov.cn/law-search/download/pc"
+
+CANDIDATE_LAW_TYPES = frozenset({"宪法", "法律"})
 
 
 class ContentDownloadSpider(Spider):
@@ -33,36 +36,53 @@ class ContentDownloadSpider(Spider):
         self._total = 0
         self._downloaded = 0
 
-    async def start(self) -> AsyncIterator[Request]:
+    async def _load_candidates_from_db(self) -> list[dict]:
+        lm = LawIndexManager()
+        db_candidates = await lm.afind_download_candidates(
+            law_types=CANDIDATE_LAW_TYPES,
+        )
+        if db_candidates:
+            logger.info("Loaded %d download candidates from database", len(db_candidates))
+            return [
+                {
+                    "law_id": c["law_id"],
+                    "law_name": c["law_name"],
+                    "status": c["status"],
+                    "law_type": c["law_type"],
+                }
+                for c in db_candidates
+            ]
+        return []
 
+    async def _load_candidates_from_json(self) -> list[dict]:
         if not self._index_path:
-            logger.error("No index_path provided")
-            return
-
+            return []
         idx = AsyncPath(self._index_path)
         if not await idx.exists():
-            logger.error("Index file not found: %s", self._index_path)
-            return
+            return []
 
         content = await idx.read_text(encoding="utf-8")
         law_list: list[dict] = json.loads(content)
-        logger.info("Loaded %d laws from index: %s", len(law_list), self._index_path)
-        structured_dir = AsyncPath(self.settings.get("LAW_CONTENT_STRUCTURED_DIR"))
-        await structured_dir.mkdir(parents=True, exist_ok=True)
-        current_files = {f.stem async for f in structured_dir.iterdir()}
-        for entry in law_list:
+        logger.info("Loaded %d laws from index file: %s", len(law_list), self._index_path)
+        return law_list
+
+    async def start(self) -> AsyncIterator[Request]:
+        candidates = await self._load_candidates_from_db()
+        if not candidates and self._index_path:
+            candidates = await self._load_candidates_from_json()
+
+        if not candidates:
+            logger.error("No law entries found for download")
+            return
+
+        for entry in candidates:
             if self._category and entry.get("category") != self._category:
                 continue
 
             if entry.get("status") != "有效":
                 continue
 
-            if entry.get("law_type") not in {
-                "宪法",
-                "法律",
-                # "行政法规",
-                # "监察法规",
-            }:
+            if entry.get("law_type") not in CANDIDATE_LAW_TYPES:
                 continue
 
             if entry.get("law_type") == "宪法":
@@ -71,15 +91,11 @@ class ContentDownloadSpider(Spider):
                 else:
                     entry["law_name"] = "中华人民共和国宪法"
 
-            if entry.get("law_name") in current_files:
-                logger.debug("Skipping already downloaded: %s", entry.get("law_name"))
-                continue
-
             bbbs = entry.get("law_id", "") or entry.get("bbbs", "")
             law_name = entry.get("law_name", "")
 
             if not bbbs:
-                logger.warning("No bbbs for %s, skipping", law_name)
+                logger.warning("No law_id for %s, skipping", law_name)
                 continue
 
             params = urlencode({"format": "docx", "bbbs": bbbs})

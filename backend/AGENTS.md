@@ -176,6 +176,7 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 - Python 3.14 语法：无需 `from __future__ import annotations`，`except` 多个异常可直接用逗号。
 - 启用的 ruff 规则集：`F/E/W/I/N/FAST/PL/UP/NPY/PD/ASYNC/B/C4/FURB/PTH`（开启 preview）。
 - 忽略：`PLR/PLC0415/PLW0603/PLW3201/PLW0717`。
+- 路由使用 RESTful 风格，`lawrag/routers/schema.py` 定义所有请求/响应模型。
 - `httpx2` 是 `httpx` 的兼容api，作为积极维护的分支，原本从 `httpx` 导入可直接改为从 `httpx2` 导入
 
 ## 测试

@@ -48,7 +48,7 @@ async def api_search(request: SearchRequest) -> SearchResponse:
         return SearchResponse(success=False, status=f"搜索失败: {e!s}", results=[])
 
 
-@router.get("/pageindex/laws")
+@router.get("/laws")
 async def api_pageindex_find_laws() -> LawListResponse:
     try:
         pageindex = LawPageIndex()
@@ -60,7 +60,7 @@ async def api_pageindex_find_laws() -> LawListResponse:
         return LawListResponse(success=False, status=f"获取失败: {e!s}", laws=[])
 
 
-@router.get("/pageindex/laws/{law_name}/articles")
+@router.get("/laws/{law_name}/articles")
 async def api_pageindex_get_articles(
     law_name: str,
     start: int | None = None,
@@ -87,7 +87,7 @@ async def api_pageindex_get_articles(
         return LawArticleListResponse(success=False, status=f"获取失败: {e!s}", articles=[])
 
 
-@router.get("/pageindex/laws/{law_name}/toc")
+@router.get("/laws/{law_name}/toc")
 async def api_pageindex_get_toc(law_name: str) -> LawTocResponse:
     try:
         pageindex = LawPageIndex()
@@ -99,7 +99,7 @@ async def api_pageindex_get_toc(law_name: str) -> LawTocResponse:
         return LawTocResponse(success=False, status=f"获取失败: {e!s}", law_name=law_name, toc=[])
 
 
-@router.get("/pageindex/laws/{law_name}/articles/{article_number}")
+@router.get("/laws/{law_name}/articles/{article_number}")
 async def api_pageindex_get_article(
     law_name: str,
     article_number: int,

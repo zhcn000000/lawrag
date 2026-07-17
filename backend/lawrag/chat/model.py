@@ -12,9 +12,11 @@ from pydantic_ai import (
     DocumentUrl,
     ImageUrl,
     ModelProfile,
+    UploadedFile,
     UserPromptPart,
     VideoUrl,
 )
+from pydantic_ai.messages import MultiModalContent, is_multi_modal_content
 from pydantic_ai.models import Model
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.profiles.openai import OpenAIModelProfile
@@ -57,6 +59,31 @@ def http_client() -> AsyncClient:
     )
 
 
+def _map_media_item(item: MultiModalContent) -> dict:
+    if isinstance(item, str):
+        return {"type": "text", "text": item}
+    if isinstance(item, ImageUrl):
+        return {"type": "image_url", "image_url": {"url": item.url}}
+    if isinstance(item, AudioUrl):
+        return {"type": "audio_url", "audio_url": {"url": item.url}}
+    if isinstance(item, VideoUrl):
+        return {"type": "video_url", "video_url": {"url": item.url}}
+    if isinstance(item, DocumentUrl):
+        return {"type": "document_url", "document_url": {"url": item.url}}
+    if isinstance(item, BinaryContent):
+        if item.is_image:
+            return {"type": "image_url", "image_url": {"url": item.data_uri}}
+        if item.is_audio:
+            return {"type": "audio_url", "audio_url": {"url": item.data_uri}}
+        if item.is_video:
+            return {"type": "video_url", "video_url": {"url": item.data_uri}}
+        return {"type": "document_url", "document_url": {"url": item.data_uri}}
+    if isinstance(item, UploadedFile):
+        raise ValueError(
+            "UploadedFile is not supported in this context. Please provide a URL or binary content instead.",
+        )
+
+
 class VLLMChatModel(OpenAIChatModel):
     async def _map_user_prompt(self, part: UserPromptPart) -> ChatCompletionUserMessageParam:
         content: str | list[dict]
@@ -65,27 +92,10 @@ class VLLMChatModel(OpenAIChatModel):
         else:
             content = []
             for item in part.content:
-                if isinstance(item, str):
-                    content.append({"type": "text", "text": item})
-                elif isinstance(item, ImageUrl):
-                    content.append({"type": "image_url", "image_url": {"url": item.url}})
-                elif isinstance(item, AudioUrl):
-                    content.append({"type": "audio_url", "audio_url": {"url": item.url}})
-                elif isinstance(item, VideoUrl):
-                    content.append({"type": "video_url", "video_url": {"url": item.url}})
-                elif isinstance(item, DocumentUrl):
-                    content.append({"type": "document_url", "document_url": {"url": item.url}})
-                elif isinstance(item, BinaryContent):
-                    if item.is_image:
-                        content.append({"type": "image_url", "image_url": {"url": item.data_uri}})
-                    elif item.is_audio:
-                        content.append({"type": "audio_url", "audio_url": {"url": item.data_uri}})
-                    elif item.is_video:
-                        content.append({"type": "video_url", "video_url": {"url": item.data_uri}})
-                    else:
-                        content.append({"type": "document_url", "document_url": {"url": item.data_uri}})
+                if is_multi_modal_content(item):
+                    content.append(_map_media_item(item))
                 else:
-                    raise ValueError(f"Unsupported content item type: {type(item)}")
+                    content.append({"type": "text", "text": item})
         return ChatCompletionUserMessageParam(
             role="user",
             content=content,  # type: ignore
@@ -155,13 +165,12 @@ async def aembed_documents(
     for document in documents:
         if isinstance(document, Document):
             text = document.content
-            img_url = document.image_url
+            multimedia = document.multimedia or []
         else:
             text = document
-            img_url = None
+            multimedia = []
         content: list[dict] = [{"type": "text", "text": text}]
-        if img_url:
-            content.append({"type": "image_url", "image_url": {"url": img_url}})
+        content.extend(_map_media_item(item) for item in multimedia)
         inputs.append({"content": content})
     payload: dict = {
         "model": EMBEDDING_UID,
@@ -200,13 +209,12 @@ async def arerank_documents(
     for document in documents:
         if isinstance(document, Document):
             text = document.content
-            img_url = document.image_url
+            multimedia = document.multimedia or []
         else:
             text = document
-            img_url = None
+            multimedia = []
         content: list[dict] = [{"type": "text", "text": text}]
-        if img_url:
-            content.append({"type": "image_url", "image_url": {"url": img_url}})
+        content.extend(_map_media_item(item) for item in multimedia)
         inputs.append({"content": content})
 
     headers = {"Content-Type": "application/json"}

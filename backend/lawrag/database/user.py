@@ -15,7 +15,6 @@ from .database import DatabaseManager
 from .tables import User
 
 ALGORITHM = "HS256"
-TOKEN_EXPIRES_IN = settings.TOKEN_EXPIRES_IN
 
 
 class OAuth2MultiBearer(OAuth2PasswordBearer):
@@ -23,12 +22,12 @@ class OAuth2MultiBearer(OAuth2PasswordBearer):
         token = await super().__call__(request)
         if token is None:
             token = request.cookies.get("lawrag_token")
-        # if token is None:
-        #     token = request.query_params.get("token")
+        if token is None:
+            raise self.make_not_authenticated_error()
         return token
 
 
-oauth2_schema = OAuth2MultiBearer(tokenUrl="/api/login", refreshUrl="/api/refresh")
+oauth2_schema = OAuth2MultiBearer(tokenUrl="/api/login", refreshUrl="/api/refresh", auto_error=False)
 
 
 class TokenDataDict(TypedDict):
@@ -51,7 +50,7 @@ class UserManager:
 
     async def acreate_access_token(self, username: str) -> str:
         user_id = (await self.aget_id_by_names([username]))[0]
-        expire = datetime.now(UTC) + timedelta(seconds=TOKEN_EXPIRES_IN)
+        expire = datetime.now(UTC) + timedelta(seconds=settings.TOKEN_EXPIRES_IN)
         payload = {"sub": username, "user_id": str(user_id), "exp": expire}
         return jwt.encode(payload, self._get_secret(), algorithm=ALGORITHM)
 
@@ -63,8 +62,8 @@ class UserManager:
                 username=str(payload["sub"]),
                 user_id=UUID(payload["user_id"]),
             )
-        except jwt.PyJWTError:
-            return None
+        except jwt.PyJWTError as e:
+            raise HTTPException(status_code=401, detail="Could not validate credentials") from e
 
     async def aget(self, user_id: UUID) -> UserInfoDict | None:
         async with self.__db.asession() as session:

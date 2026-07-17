@@ -6,8 +6,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 
 from lawrag.chat.agent import ModelDeps, agent
-from lawrag.database.user import TOKEN_EXPIRES_IN, TokenDataDict, UserManager
-from lawrag.environments import find_project_directory
+from lawrag.database.user import TokenDataDict, UserManager
+from lawrag.environments import find_project_directory, settings
 from lawrag.routers.user import CurrentUserDep
 
 from .chat import router as chat_router
@@ -61,7 +61,7 @@ async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], resp
     token = await user_manager.averify_credentials(form_data.username, form_data.password)
     if token is None:
         raise HTTPException(status_code=401, detail="Incorrect username or password")
-    response.set_cookie(key="lawrag_token", value=token, httponly=True, max_age=TOKEN_EXPIRES_IN, secure=True)
+    response.set_cookie(key="lawrag_token", value=token, httponly=True, max_age=settings.TOKEN_EXPIRES_IN, secure=True)
     return TokenResponse(access_token=token)
 
 
@@ -77,7 +77,7 @@ async def register(request: UserCredentialsRequest) -> StatusResponse:
 @app.post("/api/refresh")
 async def refresh_token(token_data: Annotated[TokenDataDict, CurrentUserDep], response: Response) -> TokenResponse:
     token = await user_manager.acreate_access_token(token_data["username"])
-    response.set_cookie(key="lawrag_token", value=token, httponly=True, max_age=TOKEN_EXPIRES_IN, secure=True)
+    response.set_cookie(key="lawrag_token", value=token, httponly=True, max_age=settings.TOKEN_EXPIRES_IN, secure=True)
     return TokenResponse(access_token=token)
 
 

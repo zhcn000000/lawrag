@@ -21,11 +21,11 @@ def get_task(offline: bool = False) -> Callable[[str], Awaitable[str]]:
             deps.select_toolset = deps.select_toolset - {"web_toolkit"}
         result = await agent.run(text, deps=deps, model_settings=get_model_settings(thinking=True))
         logger.info("Evaluating case: %s Model output: %s", text, result.output)
-        anwser = result.output
+        answer = result.output
         retries = 0
         while (
-            ("<tool_call>" in anwser and "</tool_call>" in anwser)
-            or ("<tool_code>" in anwser and "</tool_code>" in anwser)
+            ("<tool_call>" in answer and "</tool_call>" in answer)
+            or ("<tool_code>" in answer and "</tool_code>" in answer)
         ) and retries < 3:
             logger.warning("Model Tool Call Failed, Attempt %s", retries + 1)
             message_history = result.all_messages()
@@ -35,10 +35,10 @@ def get_task(offline: bool = False) -> Callable[[str], Awaitable[str]]:
                 message_history=message_history,
                 model_settings=get_model_settings(thinking=True),
             )
-            anwser = result.output
-            logger.info("Evaluating case: %s Retries: %s Model output: %s", text, retries, anwser)
+            answer = result.output
+            logger.info("Evaluating case: %s Retries: %s Model output: %s", text, retries, answer)
             retries += 1
-        return anwser
+        return answer
 
     return task
 

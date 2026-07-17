@@ -23,7 +23,7 @@ def _parse_date(value: object) -> date | None:
     return None
 
 
-class LawIndexDict(TypedDict, total=False):
+class LawIndexDict(TypedDict):
     law_id: str
     law_name: str
     office: str

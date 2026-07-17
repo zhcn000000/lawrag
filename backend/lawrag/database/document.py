@@ -25,7 +25,7 @@ _TYPE_UNIT = {"part": "编", "subpart": "分编", "chapter": "章", "section": "
 
 
 class ImportResultDict(TypedDict):
-    """aimport_file / aimport_from_dir 返回的导入结果。"""
+    """aimport_laws 返回的导入结果。"""
 
     file: str
     status: str

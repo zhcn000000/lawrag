@@ -110,7 +110,7 @@ async def search(
 
 @cmd.command("eval")
 @runnify
-async def eval_run(
+async def eval(
     input: Annotated[Path | None, Option("--input", "-i", help="评估样本 JSON 输入路径")] = None,
     output: Annotated[Path | None, Option("--output", "-o", help="评估报告 JSON 输出路径")] = None,
     start: Annotated[int, Option("--start", "-s", help="评估样本起始索引")] = 0,
@@ -123,8 +123,7 @@ async def eval_run(
     与标准答案对比后由 LLM 裁判判定是否通过, 结果以 rich 表格展示并写入 JSON。
     """
     if output is None:
-        output = settings.DATA_ROOT / "eval" / "report.json"
-    output.parent.mkdir(parents=True, exist_ok=True)
+        output = Path("lawrag_eval_report.json")
 
     if input is None:
         input = find_project_directory() / "examples" / "case.json"
@@ -149,7 +148,7 @@ async def eval_run(
         note = note[:80] + ("..." if len(note) > 80 else "")
         table.add_row(mark, question, note)
     print(table)
-
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(
         TypeAdapter(list[LawRagCaseReport | LawRagCaseFailure]).dump_json(reports, indent=2, ensure_ascii=False),
     )
@@ -185,17 +184,10 @@ async def database_clean(
 @pageindex_cmd.command("import")
 @runnify
 async def pageindex_import(
-    path: Annotated[Path, Argument(help="Path to law .json file or directory")] | None = None,
-    category: Annotated[str | None, Option("--category", "-c", help="Category for the laws")] = None,
+    law_name: Annotated[str | None, Option("--law", "-l", help="Import specific law by name from DB")] = None,
 ) -> None:
     docstore = DocumentStore()
-    if path is None:
-        path = settings.DATA_ROOT / "structured_laws"
-    if path.is_dir():
-        results = await docstore.aimport_from_dir(dir_path=path)
-    else:
-        result = await docstore.aimport_file(file_path=path)
-        results = [result]
+    results = await docstore.aimport_laws(law_name=law_name)
     total = sum(r.get("count", 0) for r in results)
     ok = sum(1 for r in results if r.get("status") == "ok")
     error = sum(1 for r in results if r.get("status") == "error")
@@ -277,7 +269,7 @@ async def pageindex_embed(
 ) -> None:
     docstore = DocumentStore()
     logger.info("开始嵌入法律 '%s' 的法条...", law_name)
-    result = await docstore.aembed_law_articles(
+    result = await docstore.aembed_laws(
         law_name=law_name,
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
@@ -291,39 +283,71 @@ async def pageindex_embed(
 @pageindex_cmd.command("convert")
 @runnify
 async def pageindex_convert(
-    raw_dir: Annotated[Path | None, Option("--raw-dir", "-r", help="raw_laws 目录路径")] = None,
-    output_dir: Annotated[Path | None, Option("--output-dir", "-o", help="输出目录 (structured_laws)")] = None,
+    raw_dir: Annotated[Path | None, Option("--raw-dir", "-r", help="raw_laws 目录路径 (文件回退)")] = None,
+    output_dir: Annotated[Path | None, Option("--output-dir", "-o", help="输出目录 (文件回退)")] = None,
     filter_name: Annotated[str | None, Option("--filter", "-f", help="仅转换名称包含此关键词的法律")] = None,
 ) -> None:
-    """从 raw_laws 重新解析并生成 structured_laws JSON (无需重新下载)。
+    """从数据库 raw 文本重新解析并更新 structured 数据。
 
-    读取 ``raw_laws/*.txt`` 中的 markitdown 原始文本,
-    运行 ``parse_multi_level`` 解析层级结构,
-    输出 JSON 到 ``structured_laws/*.json``。
+    默认从 law_index 表读取 raw 文本, 运行 parse_multi_level 解析层级结构,
+    将结果写回 law_index.structured。指定 --raw-dir/--output-dir 时回退到文件模式。
     """
-    if raw_dir is None:
-        raw_dir = settings.DATA_ROOT / "raw_laws"
-    if output_dir is None:
-        output_dir = settings.DATA_ROOT / "structured_laws"
+    if raw_dir is not None or output_dir is not None:
+        if raw_dir is None:
+            raw_dir = settings.DATA_ROOT / "raw_laws"
+        if output_dir is None:
+            output_dir = settings.DATA_ROOT / "structured_laws"
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        results: list[dict] = []
+        for file in sorted(raw_dir.rglob("*.txt")):
+            if file.name.startswith("."):
+                continue
+            law_name = file.stem
+            if filter_name and filter_name not in law_name:
+                continue
+            try:
+                text = file.read_text(encoding="utf-8")
+                parsed = parse_multi_level(text)
+                if not has_parsed_content(parsed):
+                    logger.warning("跳过 %s: 无法解析内容", law_name)
+                    results.append({"law_name": law_name, "status": "skipped"})
+                    continue
+                target = output_dir / f"{law_name}.json"
+                target.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
+                results.append({"law_name": law_name, "status": "ok"})
+            except Exception:
+                logger.exception("转换失败: %s", law_name)
+                results.append({"law_name": law_name, "status": "error"})
+
+        ok = sum(1 for r in results if r["status"] == "ok")
+        skipped = sum(1 for r in results if r["status"] == "skipped")
+        errors = sum(1 for r in results if r["status"] == "error")
+        logger.info("转换完成: %d OK, %d 跳过, %d 失败 (共 %d)", ok, skipped, errors, len(results))
+        return
+
+    from lawrag.database.law_index import LawIndexManager
+
+    lm = LawIndexManager()
+    entries = await lm.afind_all(has_raw=True)
 
     results: list[dict] = []
-    for file in sorted(raw_dir.rglob("*.txt")):
-        if file.name.startswith("."):
-            continue
-        law_name = file.stem
+    for entry in entries:
+        law_name = entry["law_name"]
         if filter_name and filter_name not in law_name:
             continue
         try:
-            text = file.read_text(encoding="utf-8")
+            text = entry["raw"]
+            if not text:
+                results.append({"law_name": law_name, "status": "skipped"})
+                continue
             parsed = parse_multi_level(text)
             if not has_parsed_content(parsed):
                 logger.warning("跳过 %s: 无法解析内容", law_name)
                 results.append({"law_name": law_name, "status": "skipped"})
                 continue
-            target = output_dir / f"{law_name}.json"
-            target.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
+            await lm.aset_structured(entry["law_id"], parsed)
             results.append({"law_name": law_name, "status": "ok"})
         except Exception:
             logger.exception("转换失败: %s", law_name)
@@ -342,10 +366,6 @@ async def spider_crawl(
         Literal["xf", "flfg", "xzfg", "jcfg", "sfjs", "dfxfg", "all"],
         Option("--category", "-c", help="Law category to crawl"),
     ] = "all",
-    output: Annotated[
-        Path | None,
-        Option("--output", "-o", help="Output JSON path (default: data/law_index/law_index.json)"),
-    ] = None,
 ) -> None:
     """Stage 1: Crawl the NPC law database API to build a law index.
 
@@ -355,47 +375,20 @@ async def spider_crawl(
     """
     logger.info("Running law index spider for category: %s", category)
 
-    await run_law_index_spider(category=category, output=output)
+    await run_law_index_spider(category=category)
     logger.info("Law index crawl completed.")
 
 
 @spider_cmd.command("download")
 @runnify
-async def spider_download(
-    index_path: Annotated[Path | None, Argument(help="Path to law index JSON file from 'lawrag spider crawl'")] = None,
-    output_dir: Annotated[
-        Path | None,
-        Option("--output-dir", "-o", help="Output directory for structured law files"),
-    ] = None,
-    download_dir: Annotated[
-        Path | None,
-        Option("--download-dir", "-d", help="Directory for raw downloaded docx files"),
-    ] = None,
-    category: Annotated[
-        Literal["xf", "flfg", "xzfg", "jcfg", "sfjs", "dfxfg", "all"] | None,
-        Option("--category", "-c", help="Filter by category"),
-    ] = None,
-) -> None:
-    """Stage 2+3: Download and parse law content from previously crawled index.
+async def spider_download() -> None:
+    """Stage 2+3: Download and parse law content from the NPC database.
 
-    Downloads docx/HTML from NPC database, converts to text,
-    and parses multi-level structure (chapters/sections/articles).
+    Downloads docx/HTML via signed URLs, converts to text with markitdown,
+    parses multi-level structure, and stores results in the law_index DB table.
     """
-    if index_path is None:
-        index_path = settings.DATA_ROOT / "law_index" / "law_index.json"
-
-    if category == "all":
-        category = None  # 'all' means no filtering
-
-    results = await run_content_download(
-        index_path=index_path,
-        structured_dir=output_dir,
-        download_dir=download_dir,
-        category=category,
-    )
-    ok = sum(1 for r in results if r["status"] == "ok")
-    failed = sum(1 for r in results if r["status"] != "ok")
-    logger.info("Download+parse completed: %d OK, %d failed", ok, failed)
+    await run_content_download()
+    logger.info("Download+parse completed.")
 
 
 cmd.add_typer(spider_cmd, name="spider")

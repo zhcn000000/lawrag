@@ -16,7 +16,7 @@ async def test_rag_hybrid_search(setup_real_db) -> None:
     docstore = DocumentStore()
     ragsearch = RAGSearch()
 
-    embed_result = await docstore.aembed_law_articles(law_name=law_name)
+    embed_result = await docstore.aembed_laws(law_name=law_name)
     assert embed_result["chunks_created"] >= 0
 
     results = await ragsearch.ahyprid_search(query="台湾问题的法律规定", limit=3)
@@ -33,7 +33,7 @@ async def test_rag_search_with_law_filter(setup_real_db) -> None:
     docstore = DocumentStore()
     ragsearch = RAGSearch()
 
-    _ = await docstore.aembed_law_articles(law_name=law_name)
+    _ = await docstore.aembed_laws(law_name=law_name)
 
     results = await ragsearch.ahyprid_search(query="统一", limit=3, law_name=law_name)
     assert len(results) >= 1
@@ -48,7 +48,7 @@ async def test_rag_search_pure_bm25(setup_real_db) -> None:
     docstore = DocumentStore()
     ragsearch = RAGSearch()
 
-    _ = await docstore.aembed_law_articles(law_name=law_name)
+    _ = await docstore.aembed_laws(law_name=law_name)
 
     results = await ragsearch.ahyprid_search(query="台湾", limit=3, vecweight=0)
     assert len(results) >= 1

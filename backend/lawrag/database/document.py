@@ -1,11 +1,8 @@
-import json
 import logging
 from collections.abc import Sequence
-from os import PathLike
 from typing import TypedDict
 from uuid import UUID, uuid7
 
-from anyio import Path as AsyncPath
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.sql.functions import count
@@ -17,6 +14,7 @@ from lawrag.documents.models import Document
 from lawrag.documents.nlp import asplit_document, atokenize_documents
 
 from .database import DatabaseManager
+from .law_index import LawIndexManager
 from .tables import DocumentTable, LawNode
 
 logger = logging.getLogger(__name__)
@@ -32,6 +30,7 @@ class ImportResultDict(TypedDict):
     file: str
     status: str
     count: int
+    inserted: int
 
 
 class EmbedResultDict(TypedDict):
@@ -69,15 +68,11 @@ class DocumentStore:
 
     # ── 法律导入 ──
 
-    async def aimport_file(self, file_path: str | PathLike) -> ImportResultDict:
-        path = AsyncPath(file_path)
-        law_name = path.stem
-        parsed: dict = json.loads(await path.read_text(encoding="utf-8"))
-
+    async def aimport_parsed(self, law_name: str, parsed: dict) -> ImportResultDict:
         nodes = flatten_hierarchy(parsed, law_name)
         articles = sum(1 for n in nodes if n["node_type"] == "article")
         if articles == 0:
-            return ImportResultDict(file=law_name, status="empty", count=0)
+            return ImportResultDict(file=law_name, status="empty", count=0, inserted=0)
 
         ids = [uuid7() for _ in nodes]
 
@@ -110,30 +105,32 @@ class DocumentStore:
                 insert(LawNode)
                 .values(values)
                 .on_conflict_do_nothing(index_elements=[col(LawNode.law_name), col(LawNode.path)])
-            )
-            await session.execute(stmt)
-            await session.commit()
+            ).returning(col(LawNode.id))
+            result = await session.execute(stmt)
+            inserted = len(result.fetchall())
 
         logger.info("Imported %s: %d nodes (%d articles)", law_name, len(nodes), articles)
-        return ImportResultDict(file=law_name, status="ok", count=articles)
+        return ImportResultDict(file=law_name, status="ok", count=articles, inserted=inserted)
 
-    async def aimport_from_dir(self, dir_path: str | PathLike) -> list[ImportResultDict]:
-        path = AsyncPath(dir_path)
-        if not await path.is_dir():
-            raise NotADirectoryError(f"Not a directory: {path}")
+    async def aimport_laws(self, law_name: str | None = None) -> list[ImportResultDict]:
+
+        lm = LawIndexManager()
+        all_entries = await lm.afind_all()
+        entries = [e for e in all_entries if e.get("structured") is not None]
+        if law_name is not None:
+            entries = [e for e in entries if e["law_name"] == law_name]
 
         results: list[ImportResultDict] = []
-        paths = sorted([file_path async for file_path in path.rglob("*.json")])
-
-        for file_path in paths:
-            if await file_path.is_file() and not file_path.name.startswith("."):
-                try:
-                    logger.info("Importing %s...", file_path)
-                    result = await self.aimport_file(file_path=file_path)
-                    results.append(result)
-                except Exception:
-                    logger.exception("Failed to import %s", file_path)
-                    results.append(ImportResultDict(file=file_path.stem, status="error", count=0))
+        for entry in entries:
+            try:
+                logger.info("Importing %s from database...", entry["law_name"])
+                structured = entry["structured"]
+                assert structured is not None
+                result = await self.aimport_parsed(entry["law_name"], structured)
+                results.append(result)
+            except Exception:
+                logger.exception("Failed to import %s", entry["law_name"])
+                results.append(ImportResultDict(file=entry["law_name"], status="error", count=0, inserted=0))
         return results
 
     # ── 文本嵌入 (批量) ──
@@ -182,7 +179,7 @@ class DocumentStore:
 
     # ── 法条嵌入 ──
 
-    async def aembed_law_articles(
+    async def aembed_laws(
         self,
         law_name: str | None = None,
         chunk_size: int = 4096,

@@ -1,11 +1,8 @@
-import json
 import logging
-from pathlib import Path
 from typing import Any
 
 from scrapy.crawler import AsyncCrawlerRunner
 
-from lawrag.environments import settings as env_settings
 from lawrag.spider.content_spider import ContentDownloadSpider
 from lawrag.spider.law_spider import LawIndexSpider
 
@@ -65,50 +62,21 @@ CONTENT_DOWNLOAD_SETTINGS.update({
 async def run_law_index_spider(
     *,
     category: str = "all",
-    output: Path | None = None,
     extra_settings: dict[str, Any] | None = None,
 ) -> None:
     settings = LAW_INDEX_SETTINGS.copy()
     if extra_settings:
         settings.update(extra_settings)
 
-    output_path = output or (env_settings.DATA_ROOT / "law_index" / "law_index.json")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    settings["LAW_INDEX_PATH"] = output_path
-
     runner = AsyncCrawlerRunner(settings)
     await runner.crawl(LawIndexSpider, category=category)
 
 
-async def run_content_download(
-    index_path: str | Path,
-    *,
-    structured_dir: str | Path | None = None,
-    download_dir: str | Path | None = None,
-    raw_dir: str | Path | None = None,
-    category: str | None = None,
-) -> list[dict]:
-    """Run the Scrapy content download spider that downloads, converts, and parses laws.
-
-    Returns a list of result dicts: {"law_name": ..., "status": "ok"/"failed"/"error", "output": path}
-    """
+async def run_content_download(extra_settings: dict[str, Any] | None = None) -> None:
+    """Run the Scrapy content download spider that downloads, converts, and stores laws in the database."""
     settings = CONTENT_DOWNLOAD_SETTINGS.copy()
-
-    download_path = Path(download_dir or env_settings.DATA_ROOT / "downloaded_laws")
-    structured_path = Path(structured_dir or env_settings.DATA_ROOT / "structured_laws")
-    raw_path = Path(raw_dir or env_settings.DATA_ROOT / "raw_laws")
-
-    manifest_path = download_path / ".manifest.json"
-    settings["LAW_CONTENT_DOWNLOAD_DIR"] = download_path
-    settings["LAW_CONTENT_RAW_DIR"] = raw_path
-    settings["LAW_CONTENT_STRUCTURED_DIR"] = structured_path
-    settings["LAW_CONTENT_MANIFEST_PATH"] = manifest_path
+    if extra_settings:
+        settings.update(extra_settings)
 
     runner = AsyncCrawlerRunner(settings)
-    await runner.crawl(ContentDownloadSpider, index_path=str(index_path), category=category)
-
-    if not manifest_path.exists():
-        logger.warning("No manifest found — no files were downloaded.")
-        return []
-
-    return json.loads(manifest_path.read_text(encoding="utf-8"))
+    await runner.crawl(ContentDownloadSpider)

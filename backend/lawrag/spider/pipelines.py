@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from tempfile import mkdtemp
 
 from anyio import Path as AsyncPath
 from asyncer import asyncify
@@ -7,7 +8,6 @@ from markitdown import MarkItDown
 
 from lawrag.database.law_index import LawIndexManager
 from lawrag.documents.lawparser import has_parsed_content, parse_multi_level
-from lawrag.environments import settings as env_settings
 from lawrag.spider.items import LawDownloadItem, LawIndexItem
 
 logger = logging.getLogger(__name__)
@@ -22,20 +22,10 @@ class ContentDownloadPipeline:
     def __init__(self) -> None:
         self._results: list[dict] = []
         self._lm = LawIndexManager()
-
-    @classmethod
-    def from_crawler(cls, crawler):
-        pipeline = cls()
-        settings = crawler.settings
-        pipeline.download_dir = AsyncPath(
-            settings.get("LAW_CONTENT_DOWNLOAD_DIR", env_settings.DATA_ROOT / "downloaded_laws"),
-        )
-        return pipeline
+        self.download_dir = AsyncPath(mkdtemp(prefix="lawrag_downloads"))
+        logger.info("Content download directory: %s", self.download_dir)
 
     async def process_item(self, item: LawDownloadItem) -> LawDownloadItem:
-        assert self.download_dir is not None, "download_dir must be set"
-
-        await self.download_dir.mkdir(parents=True, exist_ok=True)
 
         law_name: str = item["law_name"]
         law_id: str = item["law_id"]
@@ -61,7 +51,7 @@ class ContentDownloadPipeline:
                 self._results.append({"law_name": law_name, "status": "failed", "output": None})
                 return item
 
-            await self._lm.aupsert_raw(law_id, text)
+            await self._lm.aset_raw(law_id, text)
 
             parsed = parse_multi_level(text)
             if not has_parsed_content(parsed):
@@ -69,7 +59,7 @@ class ContentDownloadPipeline:
                 self._results.append({"law_name": law_name, "status": "failed", "output": None})
                 return item
 
-            await self._lm.aupsert_structured(law_id, parsed)
+            await self._lm.aset_structured(law_id, parsed)
             self._results.append({"law_name": law_name, "status": "ok", "output": str(output_path)})
         except Exception:
             logger.exception("Failed to process %s", law_name)
@@ -88,18 +78,22 @@ class LawIndexPipeline:
     def __init__(self) -> None:
         self._lm = LawIndexManager()
 
-    @classmethod
-    def from_crawler(cls, crawler):
-        return cls()
-
     async def process_item(self, item: LawIndexItem) -> LawIndexItem:
+        law_type = item.get("law_type", "")
+        law_name = item.get("law_name", "")
+
+        if law_type == "宪法":
+            if law_name != "中华人民共和国宪法（2018年修正文本）":
+                return item
+            law_name = "中华人民共和国宪法"
+
         await self._lm.aupsert(
             law_id=item.get("law_id", ""),
-            law_name=item.get("law_name", ""),
+            law_name=law_name,
             office=item.get("office", ""),
             publish_date=item.get("publish_date", ""),
             expiry_date=item.get("expiry_date", ""),
-            law_type=item.get("law_type", ""),
+            law_type=law_type,
             status=item.get("status", ""),
             detail_url=item.get("detail_url", ""),
             index_number=item.get("index_number", ""),

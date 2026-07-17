@@ -49,12 +49,13 @@ backend/
 │   │   ├── database.py        # DatabaseManager (asession/acursor/aengine)
 │   │   ├── pool.py            # ConnectionPoolManager (psycopg 同步+异步池)
 │   │   ├── types.py           # BM25Vector / BM25Loader / BM25Dumper / Password
-│   │   ├── tables.py          # SQLModel 表: User, SessionTable, HistoryTable, LawNode, DocumentTable
+│   │   ├── tables.py          # SQLModel 表: User, SessionTable, HistoryTable, LawNode, DocumentTable, LawIndex
 │   │   ├── initdb.py          # 创建扩展 (pgcrypto/vchord/vchord_bm25) + 默认 admin 账号
 │   │   ├── pageindex.py       # LawPageIndex: 法律结构树 (law/preamble/part/subpart/chapter/section/article) 导入与查询
 │   │   ├── ragsearch.py         # RAGSearch: 向量+BM25 混合检索 (RRF) + rerank + 多级 page index 面包屑
-│   │   ├── document.py        # DocumentStore: 分块 → 嵌入 → 写 documents 表
+│   │   ├── document.py        # DocumentStore: 分块 → 嵌入 → 写 documents 表, 支持从文件/DB 导入 law_nodes
 │   │   ├── history.py         # HistoryStore: 会话 + pydantic-ai ModelMessage 持久化
+│   │   ├── law_index.py       # LawIndexManager: 法律法规索引元数据 CRUD (law_id, law_name, law_type, raw, structured…)
 │   │   └── user.py            # UserManager: JWT 签发/校验 + 用户 CRUD
 │   ├── documents/
 │   │   ├── models.py          # Document (pydantic) + get_nlp() 单例
@@ -76,16 +77,7 @@ backend/
 └── uv.lock
 ```
 
-数据落盘约定（默认位于 `<proj>/data/`，可通过 `LAWRAG_DATA_ROOT` 覆盖）：
-
-```
-data/
-├── law_index/law_index.json           # spider crawl 产物
-├── downloaded_laws/*.docx             # spider download 原始文件
-├── raw_laws/<law_name>.txt            # markitdown 转换结果
-├── structured_laws/<law_name>.json    # parse_multi_level 输出的 JSON 序列化结果 (pageindex import 输入)
-└── eval/report.json                   # eval 默认输出
-```
+法律索引、原始文本与结构化层级数据均存入 PostgreSQL `law_index` 表。
 
 仓库根 `examples/report.json` 是课程提交版 100 条问答评测结果。
 
@@ -119,18 +111,24 @@ CLI 子命令（`uv run lawrag`，入口 `lawrag.__main__:main`）：
 `spider crawl` — NPC 法律法规库索引爬虫：
 
 - `-c` 分类：`xf`(宪法) / `flfg`(法律) / `xzfg`(行政法规) / `jcfg`(监察法规) / `sfjs`(司法解释) / `dfxfg`(地方性法规) / `all`（不含 dfxfg）。
-- `-o` 输出路径，默认 `<DATA_ROOT>/law_index/law_index.json`。
-- Stage 1：只发现条目，调用 `/law-search/search/list` JSON API 翻页。
+- Stage 1：调用 `/law-search/search/list` JSON API 翻页，条目直接写入 `law_index` 表。
+- 宪法仅保留最新版（2018 年修正文本），自动更名为“中华人民共和国宪法”。
 
-`spider download [INDEX_PATH]` — 下载+解析：
+`spider download` — 下载+解析：
 
-- `[INDEX_PATH]` 默认 `<DATA_ROOT>/law_index/law_index.json`。
-- `-o` 结构化输出目录；`-d` 原始 docx 目录；`-c` 可选分类过滤。
-- Stage 2+3：调用 `/law-search/download/pc` 获取签名 URL → 下载 docx → markitdown → `parse_multi_level` → `json.dumps` → `<structured_laws>/.manifest.json`。
+- `-d` 原始 docx 下载目录，默认 `<DATA_ROOT>/downloaded_laws`。
+- Stage 2+3：从 `law_index` 表读取待下载候选 (`status=有效`, `law_type in (宪法,法律)`, `raw IS NULL`)，调用 `/law-search/download/pc` 获取签名 URL → 下载 docx → markitdown → `parse_multi_level`，结果 `raw` 文本和 `structured` JSONB 写回 `law_index` 表。
 
-`pageindex convert [-r RAW_DIR] [-o OUTPUT_DIR] [-f FILTER]` — 从 `raw_laws/*.txt` 重新解析并生成 `structured_laws/*.json`（无需重新下载）。可选 `-f` 按法律名称过滤。
+`pageindex convert [-r RAW_DIR] [-o OUTPUT_DIR] [-f FILTER]` — 重新解析 raw 文本生成 structured 数据。
 
-`pageindex import [PATH] [-c CATEGORY]` — 把 `structured_laws/*.json` 导入 `law_nodes`，默认 `<DATA_ROOT>/structured_laws`。重导前先清空同 `law_name` 的节点，`(law_name, path)` 唯一键保证幂等。
+- 默认从 `law_index.raw` 列读取文本，解析后写回 `law_index.structured`。
+- 指定 `--raw-dir`/`--output-dir` 时回退到文件模式。
+
+`pageindex import [PATH] [--law LAW_NAME]` — 把层级结构数据导入 `law_nodes`。
+
+- 默认从 `law_index.structured` 列读取并导入，可选 `--law` 按名称过滤。
+- 指定 `PATH` 时回退到文件导入（目录或单文件）。
+- 重导前先清空同 `law_name` 的节点，`(law_name, path)` 唯一键保证幂等。
 
 `pageindex list|show|toc|search|embed` — 法条浏览/查询/嵌入：
 

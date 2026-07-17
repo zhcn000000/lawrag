@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlencode, urlparse
 
-from anyio import Path as AsyncPath
 from scrapy import Request, Spider
 from scrapy.http.response import Response
 
@@ -21,78 +20,28 @@ CANDIDATE_LAW_TYPES = frozenset({"宪法", "法律"})
 
 
 class ContentDownloadSpider(Spider):
-    """Spider that downloads law documents via the NPC signed-URL API.
-
-    Usage:
-        scrapy crawl content_download -a index_path=data/law_index.json
-    """
+    """Spider that downloads law documents via the NPC signed-URL API."""
 
     name = "content_download"
 
-    def __init__(self, index_path: str = "", category: str | None = None, **kwargs: Any) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._index_path = index_path
-        self._category: str | None = category
         self._total = 0
         self._downloaded = 0
 
-    async def _load_candidates_from_db(self) -> list[dict]:
-        lm = LawIndexManager()
-        db_candidates = await lm.afind_download_candidates(
-            law_types=CANDIDATE_LAW_TYPES,
-        )
-        if db_candidates:
-            logger.info("Loaded %d download candidates from database", len(db_candidates))
-            return [
-                {
-                    "law_id": c["law_id"],
-                    "law_name": c["law_name"],
-                    "status": c["status"],
-                    "law_type": c["law_type"],
-                }
-                for c in db_candidates
-            ]
-        return []
-
-    async def _load_candidates_from_json(self) -> list[dict]:
-        if not self._index_path:
-            return []
-        idx = AsyncPath(self._index_path)
-        if not await idx.exists():
-            return []
-
-        content = await idx.read_text(encoding="utf-8")
-        law_list: list[dict] = json.loads(content)
-        logger.info("Loaded %d laws from index file: %s", len(law_list), self._index_path)
-        return law_list
-
     async def start(self) -> AsyncIterator[Request]:
-        candidates = await self._load_candidates_from_db()
-        if not candidates and self._index_path:
-            candidates = await self._load_candidates_from_json()
+        lm = LawIndexManager()
+        candidates = await lm.afind_download_candidates(law_types=CANDIDATE_LAW_TYPES)
 
         if not candidates:
             logger.error("No law entries found for download")
             return
 
+        logger.info("Loaded %d download candidates from database", len(candidates))
+
         for entry in candidates:
-            if self._category and entry.get("category") != self._category:
-                continue
-
-            if entry.get("status") != "有效":
-                continue
-
-            if entry.get("law_type") not in CANDIDATE_LAW_TYPES:
-                continue
-
-            if entry.get("law_type") == "宪法":
-                if entry.get("law_name") != "中华人民共和国宪法（2018年修正文本）":
-                    continue
-                else:
-                    entry["law_name"] = "中华人民共和国宪法"
-
-            bbbs = entry.get("law_id", "") or entry.get("bbbs", "")
-            law_name = entry.get("law_name", "")
+            bbbs = entry["law_id"]
+            law_name = entry["law_name"]
 
             if not bbbs:
                 logger.warning("No law_id for %s, skipping", law_name)

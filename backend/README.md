@@ -75,17 +75,6 @@ backend/
 └── uv.lock
 ```
 
-数据落盘约定（默认 `<repo>/data/`，可用 `LAWRAG_DATA_ROOT` 覆盖）：
-
-```
-data/
-├── law_index/law_index.json           # spider crawl 产物
-├── downloaded_laws/*.docx             # spider download 原始文件
-├── raw_laws/<law_name>.txt            # markitdown 转换结果
-├── structured_laws/<law_name>.json    # parse_multi_level 输出 (pageindex import 输入)
-└── eval/report.json                   # eval 默认输出
-```
-
 仓库根 `examples/report.json` 是课程提交版 100 条问答评测结果。
 
 ## 包管理与开发命令

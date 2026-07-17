@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from datetime import date
 from typing import TypedDict
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import col
 
@@ -95,29 +95,15 @@ class LawIndexManager:
                 index_number=e.get("index_number", ""),
             )
 
-    async def aupsert_raw(self, law_id: str, text: str) -> None:
+    async def aset_raw(self, law_id: str, text: str) -> None:
         async with self.__db.asession() as session:
-            stmt = (
-                insert(LawIndex)
-                .values(law_id=law_id, raw=text)
-                .on_conflict_do_update(
-                    index_elements=[col(LawIndex.law_id)],
-                    set_={"raw": text},
-                )
-            )
+            stmt = update(LawIndex).where(col(LawIndex.law_id) == law_id).values(raw=text)
             await session.execute(stmt)
             await session.commit()
 
-    async def aupsert_structured(self, law_id: str, structured: dict) -> None:
+    async def aset_structured(self, law_id: str, structured: dict) -> None:
         async with self.__db.asession() as session:
-            stmt = (
-                insert(LawIndex)
-                .values(law_id=law_id, structured=structured)
-                .on_conflict_do_update(
-                    index_elements=[col(LawIndex.law_id)],
-                    set_={"structured": structured},
-                )
-            )
+            stmt = update(LawIndex).where(col(LawIndex.law_id) == law_id).values(structured=structured)
             await session.execute(stmt)
             await session.commit()
 
@@ -210,23 +196,23 @@ class LawIndexManager:
 
     async def afind_download_candidates(
         self,
-        *,
-        law_types: frozenset[str] | None = None,
+        law_types: frozenset[str] = frozenset({"宪法", "法律"}),
+        status: str = "有效",
+        regex: str = "法$",
+        skip_downloaded: bool = True,
     ) -> list[LawIndexDict]:
-        status = "有效"
-        if law_types is None:
-            law_types = frozenset({"宪法", "法律"})
 
         async with self.__db.asession() as session:
-            stmt = (
-                select(LawIndex)
-                .where(
-                    col(LawIndex.status) == status,
-                    col(LawIndex.law_type).in_(law_types),
-                    col(LawIndex.raw).is_(None),
-                )
-                .order_by(col(LawIndex.law_name))
+            stmt = select(LawIndex).where(
+                col(LawIndex.status) == status,
+                col(LawIndex.law_type).in_(law_types),
             )
+            if skip_downloaded:
+                stmt = stmt.where(col(LawIndex.raw).is_(None))
+            if regex is not None:
+                stmt = stmt.where(col(LawIndex.law_name).regexp_match(regex))
+            stmt = stmt.order_by(col(LawIndex.law_name))
+
             result = await session.execute(stmt)
             rows = result.scalars().all()
             return [

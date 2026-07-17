@@ -4,16 +4,24 @@ from uuid import UUID, uuid4
 import jwt
 import pytest
 from fastapi import HTTPException
+from fastapi.security import SecurityScopes
 
 from lawrag.database.history import HistoryStore
 from lawrag.database.user import ALGORITHM, UserManager
 from lawrag.environments import settings
 
 
-def _make_token(username: str, user_id: UUID, expires_in: int = 300, secret: str | None = None) -> str:
+def _make_token(
+    username: str,
+    user_id: UUID,
+    expires_in: int = 300,
+    secret: str | None = None,
+    scopes: list[str] | None = None,
+) -> str:
     payload = {
         "sub": username,
         "user_id": str(user_id),
+        "scopes": scopes or [],
         "exp": datetime.now(UTC) + timedelta(seconds=expires_in),
     }
     return jwt.encode(payload, secret or settings.JWT_SECRET.get_secret_value(), algorithm=ALGORITHM)
@@ -26,22 +34,41 @@ def test_verify_access_token_roundtrip():
     assert data is not None
     assert data["username"] == "alice"
     assert data["user_id"] == user_id
+    assert data["scopes"] == []
+
+    admin_token = _make_token("root", user_id, scopes=["admin"])
+    admin_data = UserManager.verify_access_token(admin_token)
+    assert admin_data is not None
+    assert admin_data["scopes"] == ["admin"]
 
 
 def test_verify_access_token_expired():
     token = _make_token("alice", uuid4(), expires_in=-10)
-    assert UserManager.verify_access_token(token) is None
+    with pytest.raises(HTTPException) as exc_info:
+        UserManager.verify_access_token(token)
+    assert exc_info.value.status_code == 401
 
 
 def test_verify_access_token_wrong_secret():
-    token = _make_token("alice", uuid4(), secret="not-the-real-secret")
-    assert UserManager.verify_access_token(token) is None
+    token = _make_token("alice", uuid4(), secret="not-the-real-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    with pytest.raises(HTTPException) as exc_info:
+        UserManager.verify_access_token(token)
+    assert exc_info.value.status_code == 401
 
 
 def test_get_current_user_rejects_invalid_token():
     with pytest.raises(HTTPException) as exc_info:
-        UserManager.get_current_user("garbage-token")
+        UserManager.get_current_user(SecurityScopes(), "garbage-token")
     assert exc_info.value.status_code == 401
+
+
+def test_get_current_user_enforces_admin_scope():
+    admin = UserManager.get_current_user(SecurityScopes(["admin"]), _make_token("root", uuid4(), scopes=["admin"]))
+    assert "admin" in admin["scopes"]
+
+    with pytest.raises(HTTPException) as exc_info:
+        UserManager.get_current_user(SecurityScopes(["admin"]), _make_token("alice", uuid4()))
+    assert exc_info.value.status_code == 403
 
 
 @pytest.fixture(scope="module")
@@ -94,7 +121,9 @@ async def test_credentials_and_session_isolation():
     id_b = await um.ainsert(name_b, "password-b")
     try:
         assert await um.averify_credentials(name_a, "password-a") is not None
-        assert await um.averify_credentials(name_a, "wrong-password") is None
+        with pytest.raises(HTTPException) as exc_info:
+            UserManager.get_current_user(SecurityScopes(), "invalid-token")
+            assert exc_info.value.status_code == 401
 
         session_id = await hs.acreate_session("会话A", id_a)
         assert await hs.acheck_session_exists(session_id, id_a)

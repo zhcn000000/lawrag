@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException, Security
 
 from lawrag.database.user import TokenDataDict, UserManager
 
@@ -16,7 +16,7 @@ from .schema import (
 router = APIRouter()
 user_manager = UserManager()
 
-CurrentUserDep = Depends(UserManager.get_current_user)
+CurrentUserDep = Security(UserManager.get_current_user)
 
 
 @router.get("/")
@@ -55,7 +55,7 @@ async def delete_user(
     user_id: UUID,
     token_data: Annotated[TokenDataDict, CurrentUserDep],
 ) -> StatusResponse:
-    if token_data["user_id"] != user_id and token_data["username"] != "admin":
+    if token_data["user_id"] != user_id and "admin" not in token_data["scopes"]:
         raise HTTPException(status_code=403, detail="Cannot delete other users")
     await user_manager.adelete(user_id)
     return StatusResponse(success=True, status="用户删除成功")
@@ -67,7 +67,7 @@ async def update_user(
     request: UpdateUserRequest,
     token_data: Annotated[TokenDataDict, CurrentUserDep],
 ) -> StatusResponse:
-    if token_data["user_id"] != user_id and token_data["username"] != "admin":
+    if token_data["user_id"] != user_id and "admin" not in token_data["scopes"]:
         raise HTTPException(status_code=403, detail="Cannot update other users")
     await user_manager.aupdate(user_id, username=request.username, password=request.password)
     return StatusResponse(success=True, status="用户更新成功")

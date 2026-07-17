@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
-from typing import TypedDict
+from typing import Any, TypedDict
 from uuid import UUID
 
 import jwt
 from fastapi import Depends, HTTPException, Request
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import col
@@ -27,17 +27,24 @@ class OAuth2MultiBearer(OAuth2PasswordBearer):
         return token
 
 
-oauth2_schema = OAuth2MultiBearer(tokenUrl="/api/login", refreshUrl="/api/refresh", auto_error=False)
+oauth2_schema = OAuth2MultiBearer(
+    tokenUrl="/api/login",
+    refreshUrl="/api/refresh",
+    scopes={"admin": "管理员权限"},
+    auto_error=False,
+)
 
 
 class TokenDataDict(TypedDict):
     username: str
     user_id: UUID
+    scopes: list[str]
 
 
 class UserInfoDict(TypedDict):
     id: UUID
     username: str
+    is_admin: bool
 
 
 class UserManager:
@@ -48,19 +55,21 @@ class UserManager:
     def _get_secret() -> str:
         return settings.JWT_SECRET.get_secret_value()
 
-    async def acreate_access_token(self, username: str) -> str:
-        user_id = (await self.aget_id_by_names([username]))[0]
+    async def acreate_access_token(self, user_id: UUID, username: str, is_admin: bool) -> str:
+
         expire = datetime.now(UTC) + timedelta(seconds=settings.TOKEN_EXPIRES_IN)
-        payload = {"sub": username, "user_id": str(user_id), "exp": expire}
+        scopes = ["admin"] if is_admin else []
+        payload = {"sub": username, "user_id": str(user_id), "scopes": scopes, "exp": expire}
         return jwt.encode(payload, self._get_secret(), algorithm=ALGORITHM)
 
     @staticmethod
-    def verify_access_token(token: str) -> TokenDataDict | None:
+    def verify_access_token(token: str) -> TokenDataDict:
         try:
             payload = jwt.decode(token, settings.JWT_SECRET.get_secret_value(), algorithms=[ALGORITHM])
             return TokenDataDict(
                 username=str(payload["sub"]),
                 user_id=UUID(payload["user_id"]),
+                scopes=[str(scope) for scope in payload.get("scopes", [])],
             )
         except jwt.PyJWTError as e:
             raise HTTPException(status_code=401, detail="Could not validate credentials") from e
@@ -71,12 +80,12 @@ class UserManager:
             result = await session.execute(stmt)
             user = result.scalar_one_or_none()
             if user:
-                return UserInfoDict(id=user.id, username=user.username)
+                return UserInfoDict(id=user.id, username=user.username, is_admin=user.is_admin)
             return None
 
-    async def ainsert(self, username: str, password: str) -> UUID:
+    async def ainsert(self, username: str, password: str, is_admin: bool = False) -> UUID:
         async with self.__db.asession() as session:
-            stmt = insert(User).values(username=username, password=password).returning(col(User.id))
+            stmt = insert(User).values(username=username, password=password, is_admin=is_admin).returning(col(User.id))
             result = await session.execute(stmt)
             return result.scalar_one()
 
@@ -85,12 +94,20 @@ class UserManager:
             stmt = delete(User).where(col(User.id) == user_id)
             await session.execute(stmt)
 
-    async def aupdate(self, user_id: UUID, username: str | None = None, password: str | None = None) -> None:
-        updated_data: dict[str, str] = {}
+    async def aupdate(
+        self,
+        user_id: UUID,
+        username: str | None = None,
+        password: str | None = None,
+        is_admin: bool | None = None,
+    ) -> None:
+        updated_data: dict[str, Any] = {}
         if username is not None:
             updated_data["username"] = username
         if password is not None:
             updated_data["password"] = password
+        if is_admin is not None:
+            updated_data["is_admin"] = is_admin
         if not updated_data:
             return
         async with self.__db.asession() as session:
@@ -102,7 +119,10 @@ class UserManager:
             stmt = select(User)
             result = await session.execute(stmt)
             users = result.scalars().all()
-            return {user.username: UserInfoDict(id=user.id, username=user.username) for user in users}
+            return {
+                user.username: UserInfoDict(id=user.id, username=user.username, is_admin=user.is_admin)
+                for user in users
+            }
 
     async def averify_credentials(self, username: str, password: str) -> str | None:
         async with self.__db.asession() as session:
@@ -110,11 +130,11 @@ class UserManager:
             result = await session.execute(stmt)
             user = result.scalar_one_or_none()
             if user:
-                return await self.acreate_access_token(username)
+                return await self.acreate_access_token(user.id, user.username, user.is_admin)
         return None
 
     @classmethod
-    def get_current_user(cls, token: str = Depends(oauth2_schema)) -> TokenDataDict:
+    def get_current_user(cls, security_scopes: SecurityScopes, token: str = Depends(oauth2_schema)) -> TokenDataDict:
         credentials_exception = HTTPException(
             status_code=401,
             detail="Could not validate credentials",
@@ -123,6 +143,13 @@ class UserManager:
         token_data = cls.verify_access_token(token)
         if token_data is None:
             raise credentials_exception
+        for scope in security_scopes.scopes:
+            if scope not in token_data["scopes"]:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Not enough permissions",
+                    headers={"WWW-Authenticate": f'Bearer scope="{security_scopes.scope_str}"'},
+                )
         return token_data
 
     async def aget_id_by_names(self, names: list[str]) -> list[UUID]:

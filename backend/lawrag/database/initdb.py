@@ -16,7 +16,7 @@ async def init_db(alter_system: bool = False, dbname: str | None = None) -> bool
             """),
         )
     await db.acreate_all()
-    await UserManager().ainsert("admin", "admin")
+    await UserManager().ainsert("admin", "admin", is_admin=True)
     if alter_system:
         async with db.aconnection(autocommit=True) as conn:
             await conn.execute(

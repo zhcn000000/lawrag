@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     ForeignKey,
@@ -49,6 +50,7 @@ class User(SQLModel, table=True):
         ),
     ]
     password: Annotated[str, Field(sa_column=Column(Password, nullable=False))]
+    is_admin: Annotated[bool, Field(sa_column=Column(Boolean, nullable=False, server_default="false"))]
 
     @declared_attr  # type: ignore
     @classmethod

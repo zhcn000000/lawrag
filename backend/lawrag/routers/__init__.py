@@ -76,7 +76,11 @@ async def register(request: UserCredentialsRequest) -> StatusResponse:
 
 @app.post("/api/refresh")
 async def refresh_token(token_data: Annotated[TokenDataDict, CurrentUserDep], response: Response) -> TokenResponse:
-    token = await user_manager.acreate_access_token(token_data["username"])
+    token = await user_manager.acreate_access_token(
+        token_data["user_id"],
+        token_data["username"],
+        "admin" in token_data["scopes"],
+    )
     response.set_cookie(key="lawrag_token", value=token, httponly=True, max_age=settings.TOKEN_EXPIRES_IN, secure=True)
     return TokenResponse(access_token=token)
 

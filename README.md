@@ -48,15 +48,10 @@ lawrag/
 │   ├── model_launch.json   # qwen3.5 / qwen3-embedding / qwen3-reranker 启动配置
 │   └── pyproject.toml      # Python 3.14 + vLLM 0.24 依赖
 ├── docker/                 # podman-compose: postgres-age (pgcrypto+vchord_bm25) + web
-├── data/                   # 默认数据根 (LAWRAG_DATA_ROOT 可改)
-│   ├── law_index/                # 爬取的 NPC 索引 JSON
-│   ├── downloaded_laws/*.docx     # 原始 docx
-│   ├── raw_laws/*.txt            # markitdown 转出的纯文本
-│   └── structured_laws/*.json     # parse_multi_level 输出的层级结构
 ├── examples/               # 一些例子
 |   ├── case.json           # 100 条问答样本的 Case 的设置
 │   ├── report.json         # 100 条问答样本的 Case 的 Agent 输出与评价
-│   └── laws.tar.gz         # 爬虫抓取的法律法规 json 压缩包，仅包含法律和宪法类别，解压到 data/structured_laws/ 即可直接使用
+│   └── laws.tar.gz         # 爬虫抓取的法律法规 json 压缩包，仅包含法律和宪法类别，不含行政法规/监察法规/司法解释
 ├── static/                 # `just build-ui` 把 frontend/dist 拷贝到这里, 由 FastAPI /webui/* 挂载
 ├── .proj_root              # 环境变量自动向上查找的仓库根标记
 ├── .env                    # POSTGRES_* / LLM_* 等环境变量
@@ -143,9 +138,9 @@ just docker      # database + web 一起起
 ### 4. 抓取 → 解析 → 入库 → 嵌入
 
 ```bash
-just spider-crawl         # NPC 数据库索引 (默认 all, 不含 dfxfg 地方性法规)
-just spider-download      # 下载 docx 并转 structured_laws/*.json
-just pageindex-import     # structured_laws/*.json 写入 law_nodes
+just spider-crawl         # NPC 数据库索引 → law_index 表
+just spider-download      # 下载 docx 并解析, raw/structured 写回 law_index 表
+just pageindex-import     # law_index.structured → law_nodes
 just pageindex-embed      # 把法条分块并嵌入到 documents 表 (最耗时)
 ```
 
@@ -197,7 +192,7 @@ just eval 20          # 仅跑前 20 条
 | `just web`                                           | 启动 FastAPI (uvicorn 5 workers)                                                        |
 | `just initdb` / `db-reset` / `db-clean`              | 数据库初始化/重置/清空                                                                  |
 | `just spider-crawl CATEGORY=all`                     | 抓取 NPC 法规索引                                                                       |
-| `just spider-download`                               | 下载 + 解析 docx                                                                        |
+| `just spider-download`                               | 下载 + 解析 (从 DB law_index 表读候选)                                                  |
 | `just pageindex-convert [FILTER]`                    | raw → structured (无需重新下载)                                                         |
 | `just pageindex-import`                              | structured → law_nodes                                                                  |
 | `just pageindex-embed [LAW]`                         | law_nodes → documents                                                                   |
@@ -283,15 +278,11 @@ uv run pytest tests/test_lawparser.py -k parse_multi_level -v
 
 ```txt
 data/
-├── law_index/law_index.json                # spider crawl 产物
 ├── downloaded_laws/<uuid>.docx            # spider download 原始文件
-├── raw_laws/<law_name>.txt                 # markitdown 转换结果
-├── structured_laws/<law_name>.json         # parse_multi_level 序列化结果 (pageindex import 输入)
 └── eval/report.json                        # 每次 `just eval` 默认输出
-
-examples/
-└── report.json                             # 已提交的 100 条问答评测结果
 ```
+
+法律索引、原始文本与结构化层级数据均存入 PostgreSQL `law_index` 表 (`raw` TEXT 列 + `structured` JSONB 列)，不再落盘。
 
 ## 🔐 配置参考
 
@@ -304,7 +295,7 @@ examples/
 | 学习并部署本地 LLM     | `backend/lawrag/chat/chat_model.py` (`VLLMChatModel`/`VLLMProvider`) + `llmserver` 作为 `VLLM` 模型服务端 |
 | 编写爬虫, 爬取法律法规 | `backend/lawrag/spider/` (law_spider / content_spider / runner)                                           |
 | 文档清洗、分段, 向量化 | `backend/lawrag/documents/` (splitter / embedder / tokenizer)                                             |
-| 构建 RAG 问答系统      | `backend/lawrag/database/ragsearch.py` (向量+BM25 RRF+rerrank)                                              |
+| 构建 RAG 问答系统      | `backend/lawrag/database/ragsearch.py` (向量+BM25 RRF+rerrank)                                            |
 | 引入 Agentic Framework | `backend/lawrag/chat/` (pydantic-ai Agent + 4 Capability + 2 Subagent)                                    |
 | FastAPI 演示界面       | `backend/lawrag/routers/` + `frontend/` (由 FastAPI `/webui/*` 挂载)                                      |
 | 项目技术文档           | 本 README + `backend/README.md` + `frontend/README.md` + `llmserver/README.md`                            |

@@ -8,7 +8,6 @@
 - `backend/`：Python 3.14 FastAPI + pydantic-ai 法律 RAG 系统，使用 PostgreSQL + pgvector/vchord_bm25。
 - `frontend/`：Vite + React + TypeScript 前端，由 FastAPI 挂载到 `/webui/*`。
 - `docker/`：数据库和 web 服务的 podman-compose 配置。
-- `data/`：爬虫、解析、索引、默认评测输出等运行数据。
 - `examples/report.json`：课程提交版 100 条问答评测结果。
 - `static/`：`just build-ui` 生成的前端静态资源。
 
@@ -83,5 +82,5 @@ uv run pytest
 - 不要手动编辑锁文件来声明依赖；Python 用 `uv add`，前端用 `pnpm add`。
 - 不要提交 `.venv/`、`.ruff_cache/`、`node_modules/`、`dist/`、运行日志或临时文件。
 - 不要把密钥、token、真实账号密码写入代码、日志、文档或测试数据。
-- 不要修改 `data/` 和 `examples/` 中的产物，除非任务明确要求更新数据或评测结果。
+- 不要修改 `examples/` 中的产物，除非任务明确要求更新数据或评测结果。
 - 修改项目结构、启动方式、环境变量或评测路径时，同步更新 README 和相关 `AGENTS.md`。

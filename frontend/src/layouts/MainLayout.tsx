@@ -8,13 +8,15 @@ import {
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { Avatar, Button, Dropdown, Layout, Menu, Space, Typography, theme } from "antd";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { logout } from "@/store/slices/authSlice";
+import { logout, refreshTokenThunk } from "@/store/slices/authSlice";
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
+
+const TOKEN_REFRESH_INTERVAL = 30 * 60 * 1000;
 
 const menuItems: MenuProps["items"] = [
   {
@@ -38,6 +40,14 @@ export default function MainLayout() {
   const { token: themeToken } = theme.useToken();
 
   const selectedKeys = [location.pathname];
+
+  useEffect(() => {
+    dispatch(refreshTokenThunk());
+    const timer = setInterval(() => {
+      dispatch(refreshTokenThunk());
+    }, TOKEN_REFRESH_INTERVAL);
+    return () => clearInterval(timer);
+  }, [dispatch]);
 
   const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
     navigate(key);

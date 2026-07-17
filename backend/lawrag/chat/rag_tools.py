@@ -68,10 +68,7 @@ path 不是中文标题，而是数据库物化路径
 
 @rag_capability.tool(
     name="find_laws",
-    description=(
-        "列出所有已导入的法律及其法条数量。支持正则过滤和分页。"
-        "返回 list[dict]，每个 dict 含 law_name 和 article_count。"
-    ),
+    description="列出所有已导入的法律及其法条数量。支持正则过滤和分页。",
     prepare=prepare_rag,
     include_return_schema=True,
 )
@@ -99,7 +96,7 @@ class DocumentResult(TypedDict):
     name="search_documents",
     description=(
         "根据查询语义搜索法律文档库，返回分页的文档列表。支持 regex 过滤。"
-        "每条结果含 content/name/path/score/source 字段。"
+        "如果过滤后无法检索到内容，可以尝试不使用过滤(law_name/regex)改为直接搜索"
     ),
     prepare=prepare_rag,
     include_return_schema=True,
@@ -143,8 +140,7 @@ async def search_documents(
 
 @rag_capability.tool(
     name="get_article_by_path",
-    description="根据层级路径 path 获取该 path 本身对应的法条(或章节)信息。需要输入law_name和path两个参数。"
-    "返回 dict，含 law_name/path/content/node_type/number/full_path。",
+    description="根据层级路径 path 获取该 path 本身对应的法条(或章节)信息。需要输入law_name和path两个参数。",
     prepare=prepare_rag,
     include_return_schema=True,
 )
@@ -180,8 +176,7 @@ async def get_law_articles(
 
 @rag_capability.tool(
     name="get_law_toc",
-    description="获取指定法律的多级目录(编/分编/章/节标题结构)。"
-    "返回嵌套 list[dict]，每节点含 node_type/number/title/path/children。",
+    description="获取指定法律的多级目录(编/分编/章/节标题结构)。",
     prepare=prepare_rag,
     include_return_schema=True,
 )
@@ -197,8 +192,7 @@ async def get_law_toc(
 
 @rag_capability.tool(
     name="browse_law",
-    description="按层级路径 path 逐级浏览一部法律 (编/分编/章/节/条)。"
-    "返回 dict，含 law_name/path/node_type/title/children。",
+    description="按层级路径 path 逐级浏览一部法律 (编/分编/章/节/条)。",
     prepare=prepare_rag,
 )
 async def browse_law(

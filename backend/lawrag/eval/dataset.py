@@ -23,12 +23,10 @@ evaluators = [
 ]
 
 
-def get_dataset(cases: list[Case[str, str, Any]], max_cases: int | None = None):
-    if max_cases is None:
-        max_cases = len(cases)
+def get_dataset(cases: list[Case[str, str, Any]], start: int = 0, end: int = -1) -> Dataset[str, str, Any]:
     return Dataset(
         name="法律rag准确性评估",
-        cases=cases[:max_cases],
+        cases=cases[start:end],
         evaluators=evaluators,
     )
 

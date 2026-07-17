@@ -45,7 +45,8 @@ def get_task(offline: bool = False) -> Callable[[str], Awaitable[str]]:
 
 async def evaluate(
     cases: list[LawRagCase],
-    max_cases: int | None = None,
+    start: int = 0,
+    end: int = -1,
     offline: bool = False,
 ) -> list[LawRagCaseReport | LawRagCaseFailure]:
     dataset_cases = [
@@ -57,7 +58,7 @@ async def evaluate(
         for case in cases
     ]
 
-    dataset = get_dataset(cases=dataset_cases, max_cases=max_cases)
+    dataset = get_dataset(cases=dataset_cases, start=start, end=end)
     task = get_task(offline=offline)
     results = await dataset.evaluate(
         task=task,

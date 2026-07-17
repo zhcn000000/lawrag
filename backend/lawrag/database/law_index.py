@@ -198,7 +198,7 @@ class LawIndexManager:
         self,
         law_types: frozenset[str] = frozenset({"宪法", "法律"}),
         status: str = "有效",
-        regex: str = "法$",
+        regex: str = "(?<!办)法$",
         skip_downloaded: bool = True,
     ) -> list[LawIndexDict]:
 

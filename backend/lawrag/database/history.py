@@ -57,27 +57,36 @@ class HistoryStore:
             await session.execute(stmt)
             await session.commit()
 
-    async def acreate_session(self, session: str) -> UUID:
+    async def acreate_session(self, session: str, user_id: UUID) -> UUID:
         async with self.__db.asession() as sql_session:
-            stmt = insert(SessionTable).values(name=session).returning(col(SessionTable.id))
+            stmt = insert(SessionTable).values(name=session, user_id=user_id).returning(col(SessionTable.id))
             result = await sql_session.execute(stmt)
             await sql_session.commit()
             return result.scalar_one()
 
-    async def adelete_session(self, session_id: UUID) -> None:
+    async def adelete_session(self, session_id: UUID, user_id: UUID | None = None) -> bool:
         async with self.__db.asession() as sql_session:
-            await sql_session.execute(delete(SessionTable).where(col(SessionTable.id) == session_id))
+            stmt = delete(SessionTable).where(col(SessionTable.id) == session_id)
+            if user_id is not None:
+                stmt = stmt.where(col(SessionTable.user_id) == user_id)
+            result = await sql_session.execute(stmt.returning(col(SessionTable.id)))
             await sql_session.commit()
+            return result.scalar_one_or_none() is not None
 
-    async def arename_session(self, session_id: UUID, name: str) -> None:
+    async def arename_session(self, session_id: UUID, name: str, user_id: UUID | None = None) -> bool:
         async with self.__db.asession() as sql_session:
             stmt = update(SessionTable).where(col(SessionTable.id) == session_id).values(name=name)
-            await sql_session.execute(stmt)
+            if user_id is not None:
+                stmt = stmt.where(col(SessionTable.user_id) == user_id)
+            result = await sql_session.execute(stmt.returning(col(SessionTable.id)))
             await sql_session.commit()
+            return result.scalar_one_or_none() is not None
 
-    async def alist_sessions(self) -> list[SessionDict]:
+    async def alist_sessions(self, user_id: UUID | None = None) -> list[SessionDict]:
         async with self.__db.asession() as sql_session:
             stmt = select(col(SessionTable.id), col(SessionTable.name)).order_by(col(SessionTable.id).desc())
+            if user_id is not None:
+                stmt = stmt.where(col(SessionTable.user_id) == user_id)
             result = await sql_session.execute(stmt)
             rows = result.all()
             return [SessionDict(session_id=row[0], name=row[1]) for row in rows]
@@ -102,9 +111,11 @@ class HistoryStore:
             if row:
                 return row.id
 
-    async def acheck_session_exists(self, session_id: UUID) -> bool:
+    async def acheck_session_exists(self, session_id: UUID, user_id: UUID | None = None) -> bool:
         async with self.__db.asession() as sql_session:
             stmt = select(count()).select_from(SessionTable).where(col(SessionTable.id) == session_id)
+            if user_id is not None:
+                stmt = stmt.where(col(SessionTable.user_id) == user_id)
             result = await sql_session.execute(stmt)
             cnt = result.scalar_one()
             return cnt > 0

@@ -66,7 +66,7 @@ async def python_repl(
             )
         if scope.cancel_called:
             raise ModelRetry("Python代码执行超时，请检查代码是否有无限循环或长时间运行的操作。")
-        output = "表达式结果: " + pretty_repr(result)
+        output = "表达式结果: " + pretty_repr(result)  # pyright: ignore
         if out:
             output += "\n输出:\n" + "".join(out)
         return output

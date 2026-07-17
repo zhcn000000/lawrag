@@ -68,6 +68,17 @@ class SessionTable(SQLModel, table=True):
             ),
         ),
     ]
+    user_id: Annotated[
+        UUID,
+        Field(
+            sa_column=Column(
+                Uuid,
+                ForeignKey(col(User.id), onupdate="CASCADE", ondelete="CASCADE"),
+                nullable=False,
+                index=True,
+            ),
+        ),
+    ]
     name: Annotated[str, Field(sa_column=Column(String, nullable=True, index=True))]
 
 

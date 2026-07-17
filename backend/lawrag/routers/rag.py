@@ -16,10 +16,11 @@ from .schema import (
     SearchRequest,
     SearchResponse,
 )
+from .user import CurrentUserDep
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[CurrentUserDep])
 
 
 @router.post("/search")

@@ -1,9 +1,9 @@
 import json
 from collections.abc import AsyncIterator, Sequence
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import TypeAdapter
 from pydantic_ai import (
@@ -42,6 +42,7 @@ from pydantic_ai.messages import is_multi_modal_content
 from lawrag.chat.agent import agent, get_model_settings
 from lawrag.chat.struct import SUBAGENT_REGISTRY, TOOL_REGISTRY, ModelDeps
 from lawrag.database.history import HistoryStore
+from lawrag.database.user import TokenDataDict
 
 from .schema import (
     AssistantMessageItem,
@@ -62,8 +63,9 @@ from .schema import (
     ToolsListResponse,
     UserMessageItem,
 )
+from .user import CurrentUserDep
 
-router = APIRouter()
+router = APIRouter(dependencies=[CurrentUserDep])
 
 db = HistoryStore()
 
@@ -130,7 +132,10 @@ def _resolve_user_content(
 async def api_chat(
     session_id: UUID,
     request: ChatRequest,
+    token_data: Annotated[TokenDataDict, CurrentUserDep],
 ) -> StreamingResponse:
+    if not await db.acheck_session_exists(session_id, token_data["user_id"]):
+        raise HTTPException(status_code=404, detail="Session not found")
     message_history = await db.aget_messages(session_id)
     deps = ModelDeps(select_toolset=request.tools)
     files: list[Any] = []
@@ -268,7 +273,10 @@ async def api_chat(
 @router.get("/{session_id}/history")
 async def api_history(
     session_id: UUID,
+    token_data: Annotated[TokenDataDict, CurrentUserDep],
 ) -> HistoryResponse:
+    if not await db.acheck_session_exists(session_id, token_data["user_id"]):
+        raise HTTPException(status_code=404, detail="Session not found")
     history_lists: list[ChatMessage] = []
     raw_history = await db.aget_messages(session_id)
     for item in raw_history:
@@ -368,16 +376,19 @@ async def api_generate_session_title(
 @router.post("/")
 async def api_create_session(
     request: RenameRequest,
+    token_data: Annotated[TokenDataDict, CurrentUserDep],
 ) -> SessionCreateResponse:
-    session_id = await db.acreate_session(request.name)
+    session_id = await db.acreate_session(request.name, token_data["user_id"])
     return SessionCreateResponse(success=True, status="会话创建成功", session_id=session_id, name=request.name)
 
 
 @router.delete("/{session_id}")
 async def api_delete_session(
     session_id: UUID,
+    token_data: Annotated[TokenDataDict, CurrentUserDep],
 ) -> StatusResponse:
-    await db.adelete_session(session_id)
+    if not await db.adelete_session(session_id, token_data["user_id"]):
+        raise HTTPException(status_code=404, detail="Session not found")
     return StatusResponse(success=True, status="会话删除成功")
 
 
@@ -385,14 +396,18 @@ async def api_delete_session(
 async def api_rename_session(
     session_id: UUID,
     request: RenameRequest,
+    token_data: Annotated[TokenDataDict, CurrentUserDep],
 ) -> StatusResponse:
-    await db.arename_session(session_id, request.name)
+    if not await db.arename_session(session_id, request.name, token_data["user_id"]):
+        raise HTTPException(status_code=404, detail="Session not found")
     return StatusResponse(success=True, status="会话重命名成功")
 
 
 @router.get("/list")
-async def api_session_list() -> SessionListResponse:
-    sessions = await db.alist_sessions()
+async def api_session_list(
+    token_data: Annotated[TokenDataDict, CurrentUserDep],
+) -> SessionListResponse:
+    sessions = await db.alist_sessions(token_data["user_id"])
     sessions = TypeAdapter(list[SessionItem]).validate_python(sessions, extra="ignore")
     return SessionListResponse(success=True, status="获取会话列表成功", sessions=sessions)
 

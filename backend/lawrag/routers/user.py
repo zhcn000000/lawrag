@@ -28,8 +28,14 @@ async def list_users(
 
 
 @router.put("/")
-async def create_user(request: UserCredentialsRequest) -> UserResponse:
-    user_id = await user_manager.ainsert(request.username, request.password)
+async def create_user(
+    request: UserCredentialsRequest,
+    token_data: Annotated[TokenDataDict, CurrentUserDep],
+) -> UserResponse:
+    try:
+        user_id = await user_manager.ainsert(request.username, request.password)
+    except Exception as e:
+        raise HTTPException(status_code=409, detail="Username already exists") from e
     return UserResponse(id=user_id, username=request.username)
 
 
@@ -49,6 +55,8 @@ async def delete_user(
     user_id: UUID,
     token_data: Annotated[TokenDataDict, CurrentUserDep],
 ) -> StatusResponse:
+    if token_data["user_id"] != user_id and token_data["username"] != "admin":
+        raise HTTPException(status_code=403, detail="Cannot delete other users")
     await user_manager.adelete(user_id)
     return StatusResponse(success=True, status="用户删除成功")
 
@@ -59,5 +67,7 @@ async def update_user(
     request: UpdateUserRequest,
     token_data: Annotated[TokenDataDict, CurrentUserDep],
 ) -> StatusResponse:
+    if token_data["user_id"] != user_id and token_data["username"] != "admin":
+        raise HTTPException(status_code=403, detail="Cannot update other users")
     await user_manager.aupdate(user_id, username=request.username, password=request.password)
     return StatusResponse(success=True, status="用户更新成功")

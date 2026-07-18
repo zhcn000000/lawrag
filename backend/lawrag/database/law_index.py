@@ -225,9 +225,10 @@ class LawIndexManager:
             node_result = await session.execute(select(count(col(LawNode.id))).where(col(LawNode.law_index_id) == id))
             if (node_result.scalar() or 0) > 0:
                 raise ValueError(f"法律 {row.law_name} 已导入节点, 请先删除节点后再清除下载文档")
+            law_name = row.law_name
             await session.execute(update(LawIndex).where(col(LawIndex.id) == id).values(raw=None, structured=None))
             await session.commit()
-            return row.law_name
+            return law_name
 
     async def afind_download_candidates(
         self,
@@ -314,8 +315,8 @@ class LawIndexManager:
                 law_type=r.law_type,
                 status=r.status,
                 publish_date=r.publish_date,
-                has_raw=r.raw is not None,
-                has_structured=r.structured is not None,
+                has_raw=r.has_raw,
+                has_structured=r.has_structured,
                 in_nodes=node_stats.get(r.id, (0, 0))[0] > 0,
                 article_count=node_stats.get(r.id, (0, 0))[1],
                 chunk_count=chunk_stats.get(r.id, 0),
@@ -334,7 +335,15 @@ class LawIndexManager:
     ) -> KbOverviewResult:
         """Combined overview: law_index entries with law_nodes + documents status."""
         async with self.__db.asession() as session:
-            base_stmt = select(LawIndex).order_by(col(LawIndex.law_type), col(LawIndex.law_name))
+            base_stmt = select(
+                col(LawIndex.id),
+                col(LawIndex.law_name),
+                col(LawIndex.law_type),
+                col(LawIndex.status),
+                col(LawIndex.publish_date),
+                col(LawIndex.raw).isnot(None).label("has_raw"),
+                col(LawIndex.structured).isnot(None).label("has_structured"),
+            ).order_by(col(LawIndex.law_type), col(LawIndex.law_name))
             if law_type is not None:
                 base_stmt = base_stmt.where(col(LawIndex.law_type) == law_type)
             if status is not None:
@@ -350,10 +359,10 @@ class LawIndexManager:
 
             paged_stmt = base_stmt.limit(limit).offset(offset)
             result = await session.execute(paged_stmt)
-            index_rows = result.scalars().all()
+            index_rows = result.all()
 
-        if not index_rows:
-            return KbOverviewResult(items=[], total=total)
+            if not index_rows:
+                return KbOverviewResult(items=[], total=total)
 
-        items = await self._build_index_items(index_rows)
-        return KbOverviewResult(items=items, total=total)
+            items = await self._build_index_items(index_rows)
+            return KbOverviewResult(items=items, total=total)

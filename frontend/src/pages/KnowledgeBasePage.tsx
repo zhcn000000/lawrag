@@ -133,7 +133,7 @@ export default function KnowledgeBasePage() {
 
   const handleBatchEmbed = async () => {
     const selected = getSelected();
-    const ids = selected.filter((s) => s.in_nodes && s.chunk_count === 0).map((s) => s.id);
+    const ids = selected.filter((s) => s.in_nodes).map((s) => s.id);
     if (ids.length === 0) {
       message.warning("所选法律无可嵌入项 (需已导入且未嵌入)");
       return;
@@ -148,34 +148,8 @@ export default function KnowledgeBasePage() {
   };
 
   const handleBatchImportAndEmbed = async () => {
-    const selected = getSelected();
-    const notDownloaded = selected.filter((s) => !s.has_raw).map((s) => s.id);
-    const toImport = selected.filter((s) => s.has_structured && !s.in_nodes).map((s) => s.id);
-    const toEmbed = selected.filter((s) => s.in_nodes && s.chunk_count === 0).map((s) => s.id);
-    const allEmbed = [...toImport, ...toEmbed];
-    if (toImport.length === 0 && toEmbed.length === 0) {
-      message.warning("所选法律无可处理项");
-      return;
-    }
-    try {
-      if (notDownloaded.length > 0) {
-        const dlRes = await triggerDownload({ ids: notDownloaded });
-        message.success(dlRes.status);
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        await fetchData();
-      }
-      if (toImport.length > 0) {
-        const importRes = await triggerImport({ ids: toImport });
-        message.success(importRes.status);
-      }
-      if (allEmbed.length > 0) {
-        const embedRes = await triggerEmbed({ ids: allEmbed });
-        message.success(embedRes.status);
-      }
-      setTimeout(() => fetchData(), 2000);
-    } catch {
-      message.error("一键处理失败");
-    }
+    await handleBatchImport();
+    await handleBatchEmbed();
   };
 
   const handleBatchDelete = () => {

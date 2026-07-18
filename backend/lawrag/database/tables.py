@@ -135,7 +135,7 @@ class LawIndex(SQLModel, table=True):
     detail_url: Annotated[str, Field(sa_column=Column(String(512), nullable=False))]
     index_number: Annotated[str, Field(sa_column=Column(String(16), nullable=False))]
     raw: Annotated[str | None, Field(sa_column=Column(Text, nullable=True))]
-    structured: Annotated[dict | None, Field(sa_column=Column(JSONB, nullable=True))]
+    structured: Annotated[dict | None, Field(sa_column=Column(JSONB(none_as_null=True), nullable=True))]
 
 
 class LawNode(SQLModel, table=True):

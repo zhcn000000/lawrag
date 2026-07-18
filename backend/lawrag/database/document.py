@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from typing import TypedDict
 from uuid import UUID, uuid7
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.sql.functions import count
 from sqlmodel import col
@@ -15,7 +15,7 @@ from lawrag.documents.nlp import asplit_document, atokenize_documents
 
 from .database import DatabaseManager
 from .law_index import LawIndexManager
-from .tables import DocumentTable, LawNode
+from .tables import DocumentTable, LawIndex, LawNode
 
 logger = logging.getLogger(__name__)
 
@@ -85,28 +85,50 @@ class DocumentStore:
             else:
                 full_paths[i] = seg
 
-        values = [
-            {
-                "id": ids[i],
-                "law_name": law_name,
-                "law_index_id": law_index_id,
-                "parent_id": ids[n["parent"]] if n["parent"] is not None else None,
-                "node_type": n["node_type"],
-                "number": n["number"],
-                "content": n["title"] or n["content"],
-                "path": n["path"],
-                "full_path": full_paths[i],
-            }
-            for i, n in enumerate(nodes)
-        ]
-
         async with self.__db.asession() as session:
+            if law_index_id is None:
+                idx_result = await session.execute(select(col(LawIndex.id)).where(col(LawIndex.law_name) == law_name))
+                idx_ids = idx_result.scalars().all()
+                if len(idx_ids) == 1:
+                    law_index_id = idx_ids[0]
+
             existing_stmt = select(LawNode).where(col(LawNode.law_name) == law_name).limit(1)
             existing_result = await session.execute(existing_stmt)
             existing_row = existing_result.scalar_one_or_none()
             if existing_row is not None:
+                if law_index_id is not None:
+                    backfill_stmt = (
+                        update(LawNode)
+                        .where(col(LawNode.law_name) == law_name)
+                        .where(col(LawNode.law_index_id).is_(None))
+                        .values(law_index_id=law_index_id)
+                    )
+                    backfill_result = await session.execute(backfill_stmt)
+                    relinked: int = backfill_result.rowcount  # type: ignore
+                    if relinked:
+                        logger.info(
+                            "Relinked %d existing nodes of %s to law_index %s",
+                            relinked,
+                            law_name,
+                            law_index_id,
+                        )
                 logger.info("Law %s already exists in database, skipping import", law_name)
                 return ImportResultDict(file=law_name, status="exists", count=articles, inserted=0)
+
+            values = [
+                {
+                    "id": ids[i],
+                    "law_name": law_name,
+                    "law_index_id": law_index_id,
+                    "parent_id": ids[n["parent"]] if n["parent"] is not None else None,
+                    "node_type": n["node_type"],
+                    "number": n["number"],
+                    "content": n["title"] or n["content"],
+                    "path": n["path"],
+                    "full_path": full_paths[i],
+                }
+                for i, n in enumerate(nodes)
+            ]
 
             stmt = (
                 insert(LawNode)

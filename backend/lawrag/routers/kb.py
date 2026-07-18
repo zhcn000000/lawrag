@@ -42,7 +42,7 @@ async def api_kb_overview(
         )
         laws = [
             KbLawOverviewItem(
-                id=i["id"] or None,
+                id=i["id"],
                 law_name=i["law_name"],
                 law_type=i["law_type"],
                 status=i["status"],

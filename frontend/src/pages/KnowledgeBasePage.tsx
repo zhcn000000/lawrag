@@ -26,8 +26,8 @@ import type { KbLawOverviewItem } from "@/api/types";
 
 const { Title } = Typography;
 
-const LAW_TYPES = ["宪法", "法律", "行政法规", "监察法规", "司法解释", "地方性法规", "未知"];
-const STATUS_LIST = ["有效", "尚未生效", "已修改", "已废止", "未知"];
+const LAW_TYPES = ["宪法", "法律", "行政法规", "监察法规", "司法解释", "地方性法规"];
+const STATUS_LIST = ["有效", "尚未生效", "已修改", "已废止"];
 
 const CRAWL_CATEGORIES = [
   { value: "xf", label: "宪法" },
@@ -54,7 +54,6 @@ const TAG_COLORS: Record<string, string> = {
   尚未生效: "blue",
   已修改: "orange",
   已废止: "red",
-  未知: "default",
 };
 
 export default function KnowledgeBasePage() {

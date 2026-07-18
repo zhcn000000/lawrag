@@ -163,12 +163,12 @@ class LawNode(SQLModel, table=True):
         ),
     ]
     law_index_id: Annotated[
-        UUID | None,
+        UUID,
         Field(
             sa_column=Column(
                 Uuid[UUID](native_uuid=True, as_uuid=True),
-                ForeignKey(col(LawIndex.id), onupdate="CASCADE", ondelete="SET NULL"),
-                nullable=True,
+                ForeignKey(col(LawIndex.id), onupdate="CASCADE", ondelete="RESTRICT"),
+                nullable=False,
                 index=True,
             ),
         ),

@@ -209,7 +209,7 @@ class LawTocResponse(StatusResponse):
 
 
 class KbLawOverviewItem(BaseModel):
-    id: UUID | None = None
+    id: UUID
     law_name: str
     law_type: str
     status: str

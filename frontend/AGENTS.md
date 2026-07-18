@@ -25,9 +25,9 @@ frontend/
     ├── main.tsx           # 渲染入口（Provider / ConfigProvider / BrowserRouter basename="/webui" / ProtectedRoute）
     ├── App.tsx            # 备用顶层 App（main.tsx 当前为主）
     ├── layouts/           # MainLayout
-    ├── pages/             # LoginPage / DashboardPage / ChatPage
+    ├── pages/             # LoginPage / DashboardPage / ChatPage / KnowledgeBasePage / RagSearchPage
     ├── components/        # SuperMarkdown（Markdown + Mermaid + Infographic 渲染）
-    ├── api/               # auth / chat / session / types
+    ├── api/               # auth / chat / session / kb / rag / types
     ├── store/             # Redux store + slices（authSlice）
     └── utils/             # request.ts (fetch 封装) / navigateRef.ts (非组件内跳转桥接)
 ```

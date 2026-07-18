@@ -10,6 +10,7 @@ import ChatPage from "./pages/ChatPage";
 import DashboardPage from "./pages/DashboardPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import LoginPage from "./pages/LoginPage";
+import RagSearchPage from "./pages/RagSearchPage";
 import { store } from "./store";
 import { setNavigate } from "./utils/navigateRef";
 
@@ -83,6 +84,7 @@ createRoot(rootElement).render(
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/kb" element={<KnowledgeBasePage />} />
+                <Route path="/search" element={<RagSearchPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

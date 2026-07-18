@@ -141,10 +141,12 @@ export default function KnowledgeBasePage() {
 
   const handleBatchImportAndEmbed = async () => {
     const selected = getSelected();
-    const notDownloaded = selected.filter((s) => !s.has_raw).map((s) => s.law_name);
-    const toProcess = selected.filter((s) => s.has_structured && !s.in_nodes).map((s) => s.law_name);
-    if (toProcess.length === 0) {
-      message.warning("所选法律无可处理项 (需已解析未导入)");
+    const notDownloaded = selected.filter((s) => !s.has_raw).map((s) => s.law_id);
+    const toImport = selected.filter((s) => s.has_structured && !s.in_nodes).map((s) => s.law_name);
+    const toEmbed = selected.filter((s) => s.in_nodes && s.chunk_count === 0).map((s) => s.law_name);
+    const allEmbed = [...toImport, ...toEmbed];
+    if (toImport.length === 0 && toEmbed.length === 0) {
+      message.warning("所选法律无可处理项");
       return;
     }
     try {
@@ -154,10 +156,14 @@ export default function KnowledgeBasePage() {
         await new Promise((resolve) => setTimeout(resolve, 5000));
         await fetchData();
       }
-      const importRes = await triggerImport({ law_names: toProcess });
-      message.success(importRes.status);
-      const embedRes = await triggerEmbed({ law_names: toProcess });
-      message.success(embedRes.status);
+      if (toImport.length > 0) {
+        const importRes = await triggerImport({ law_names: toImport });
+        message.success(importRes.status);
+      }
+      if (allEmbed.length > 0) {
+        const embedRes = await triggerEmbed({ law_names: allEmbed });
+        message.success(embedRes.status);
+      }
       setTimeout(() => fetchData(), 2000);
     } catch {
       message.error("一键处理失败");
@@ -221,7 +227,7 @@ export default function KnowledgeBasePage() {
 
   const handleDownload = async () => {
     const selected = getSelected();
-    const lawIds = selected.filter((s) => !s.has_raw).map((s) => s.law_name);
+    const lawIds = selected.filter((s) => !s.has_raw).map((s) => s.law_id);
     try {
       const res = await triggerDownload(lawIds.length > 0 ? { law_ids: lawIds } : {});
       message.success(res.status);
@@ -307,7 +313,7 @@ export default function KnowledgeBasePage() {
     {
       title: "操作",
       key: "actions",
-      width: 160,
+      width: 120,
       render: (_, record) => (
         <Space size="small">
           {!record.has_raw ? (
@@ -316,27 +322,27 @@ export default function KnowledgeBasePage() {
                 type="link"
                 size="small"
                 icon={<CloudDownloadOutlined />}
-                onClick={() => triggerDownload({ law_ids: [record.law_name] }).then(() => fetchData())}
+                onClick={() => triggerDownload({ law_ids: [record.law_id] }).then(() => fetchData())}
               />
             </Tooltip>
           ) : null}
-          {record.has_structured && !record.in_nodes ? (
-            <Tooltip title="导入到知识库节点">
+          {record.has_structured && (!record.in_nodes || record.chunk_count === 0) ? (
+            <Tooltip title="导入并嵌入">
               <Button
                 type="link"
                 size="small"
-                icon={<ImportOutlined />}
-                onClick={() => triggerImport({ law_names: [record.law_name] }).then(() => fetchData())}
-              />
-            </Tooltip>
-          ) : null}
-          {record.in_nodes && record.chunk_count === 0 ? (
-            <Tooltip title="嵌入向量">
-              <Button
-                type="link"
-                size="small"
-                icon={<RobotOutlined />}
-                onClick={() => triggerEmbed({ law_names: [record.law_name] }).then(() => fetchData())}
+                icon={<ThunderboltOutlined />}
+                onClick={async () => {
+                  try {
+                    if (!record.in_nodes) {
+                      await triggerImport({ law_names: [record.law_name] });
+                    }
+                    await triggerEmbed({ law_names: [record.law_name] });
+                    await fetchData();
+                  } catch {
+                    // errors surfaced by individual API calls
+                  }
+                }}
               />
             </Tooltip>
           ) : null}
@@ -452,12 +458,17 @@ export default function KnowledgeBasePage() {
           type="dashed"
           onClick={handleBatchImportAndEmbed}
           disabled={
-            selectedRowKeys.length === 0 || getSelected().filter((s) => s.has_structured && !s.in_nodes).length === 0
+            selectedRowKeys.length === 0 ||
+            (getSelected().filter((s) => s.has_structured && !s.in_nodes).length === 0 &&
+              getSelected().filter((s) => s.in_nodes && s.chunk_count === 0).length === 0)
           }
         >
           一键导入+嵌入
           {selectedRowKeys.length > 0
-            ? ` (${getSelected().filter((s) => s.has_structured && !s.in_nodes).length})`
+            ? ` (${
+                getSelected().filter((s) => s.has_structured && !s.in_nodes).length +
+                getSelected().filter((s) => s.in_nodes && s.chunk_count === 0).length
+              })`
             : ""}
         </Button>
         <Button

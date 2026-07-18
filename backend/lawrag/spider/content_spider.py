@@ -37,6 +37,7 @@ class ContentDownloadSpider(Spider):
                 law_ids=self._law_ids,
                 law_types=None,
                 regex=None,
+                skip_downloaded=False,
             )
         else:
             candidates = await lm.afind_download_candidates(law_types=CANDIDATE_LAW_TYPES)

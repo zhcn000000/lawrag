@@ -21,12 +21,19 @@ export interface UserResponse {
 export interface SearchRequest {
   query: string;
   regex?: string;
-  offset?: number;
+  vecweight?: number;
   k?: number;
 }
 
+export interface SearchItem {
+  content: string;
+  source_name: string | null;
+  page_index: string | null;
+  score: number | null;
+}
+
 export interface SearchResponse extends StatusResponse {
-  results: Record<string, unknown>[];
+  results: SearchItem[];
 }
 
 export interface ChatRequest {
@@ -78,6 +85,7 @@ export interface LawListResponse extends StatusResponse {
 // ── Knowledge Base Management ──
 
 export interface KbLawOverviewItem {
+  law_id: string;
   law_name: string;
   law_type: string;
   status: string;

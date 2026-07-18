@@ -1,6 +1,7 @@
 import {
   DashboardOutlined,
   DatabaseOutlined,
+  FileSearchOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -34,6 +35,11 @@ const menuItems: MenuProps["items"] = [
     key: "/kb",
     icon: <DatabaseOutlined />,
     label: "知识库管理",
+  },
+  {
+    key: "/search",
+    icon: <FileSearchOutlined />,
+    label: "检索测试",
   },
 ];
 

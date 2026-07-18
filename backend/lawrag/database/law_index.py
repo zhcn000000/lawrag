@@ -226,7 +226,6 @@ class LawIndexManager:
         skip_downloaded: bool = True,
         law_ids: list[str] | None = None,
     ) -> list[LawIndexDict]:
-
         async with self.__db.asession() as session:
             stmt = select(LawIndex)
             if law_types is not None:
@@ -243,6 +242,7 @@ class LawIndexManager:
 
             result = await session.execute(stmt)
             rows = result.scalars().all()
+            logger.info("Find download candidates %s", str([r.law_name for r in rows]))
             return [
                 LawIndexDict(
                     id=r.id,

@@ -84,9 +84,5 @@ async def run_content_download(
     if extra_settings:
         settings.update(extra_settings)
 
-    spider_kwargs: dict[str, Any] = {}
-    if law_ids:
-        spider_kwargs["law_ids"] = law_ids
-
     runner = AsyncCrawlerRunner(settings)
-    await runner.crawl(ContentDownloadSpider, **spider_kwargs)
+    await runner.crawl(ContentDownloadSpider, law_ids=law_ids)

@@ -10,10 +10,10 @@ import {
   PlusOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import { App, Button, Card, Empty, Input, Popconfirm, Space, Switch, Table, Tag, Typography } from "antd";
+import { App, Button, Card, Empty, Input, Modal, Popconfirm, Space, Switch, Table, Tag, Typography } from "antd";
 import type { ColumnType } from "antd/es/table";
 import { useCallback, useRef, useState } from "react";
-import { runEval } from "@/api/eval";
+import { runEvalStream } from "@/api/eval";
 import type { EvalCase, EvalResultItem } from "@/api/types";
 import { SuperMarkdown } from "@/components/SuperMarkdown";
 
@@ -37,8 +37,7 @@ export default function EvalPage() {
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<EvalResultItem[]>([]);
   const abortRef = useRef<AbortController | null>(null);
-
-  const isEmpty = dataSource.length === 0;
+  const [modalOutput, setModalOutput] = useState<string | null>(null);
 
   const updateCell = useCallback((key: string, field: keyof EvalCase, value: string) => {
     setDataSource((prev) => prev.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
@@ -77,20 +76,24 @@ export default function EvalPage() {
     return cases;
   }, [dataSource, message]);
 
-  const handleStart = useCallback(async () => {
+  const handleStart = async () => {
     const cases = getCases();
     if (!cases) return;
 
     setRunning(true);
-    setResults([]);
     const controller = new AbortController();
     abortRef.current = controller;
 
+    setResults([]);
+
     try {
-      const reports = await runEval({ cases, offline }, controller.signal);
-      setResults(reports);
-      const passed = reports.filter((r) => r.success).length;
-      message.success(`评估完成: ${passed}/${reports.length} 通过`);
+      await runEvalStream(
+        { cases, offline },
+        (report) => {
+          setResults((prev) => [...prev, report]);
+        },
+        controller.signal,
+      );
     } catch (err) {
       if ((err as Error).name === "AbortError") {
         message.info("评估已停止");
@@ -101,7 +104,7 @@ export default function EvalPage() {
       setRunning(false);
       abortRef.current = null;
     }
-  }, [getCases, offline, message]);
+  };
 
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
@@ -141,21 +144,6 @@ export default function EvalPage() {
     };
     input.click();
   }, [message]);
-
-  const handleExport = useCallback(() => {
-    const cases = getCases();
-    if (!cases || cases.length === 0) {
-      message.warning("没有可导出的用例");
-      return;
-    }
-    const blob = new Blob([JSON.stringify(cases, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "eval_cases.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [getCases, message]);
 
   const handleExportResult = useCallback(() => {
     if (results.length === 0) {
@@ -247,6 +235,18 @@ export default function EvalPage() {
     { title: "名称", dataIndex: "name", width: 150, ellipsis: true },
     { title: "问题", dataIndex: "question", ellipsis: true },
     {
+      title: "模型输出",
+      width: 72,
+      render: (_, record) =>
+        record.type === "report" && record.model_output ? (
+          <Button type="link" size="small" onClick={() => setModalOutput(record.model_output ?? "")}>
+            查看
+          </Button>
+        ) : (
+          <Text type="secondary">-</Text>
+        ),
+    },
+    {
       title: "通过",
       width: 64,
       render: (_, record) => <Tag color={record.success ? "green" : "red"}>{record.success ? "通过" : "未通过"}</Tag>,
@@ -301,9 +301,6 @@ export default function EvalPage() {
             <Button icon={<UploadOutlined />} onClick={handleImport} disabled={running}>
               导入 JSON
             </Button>
-            <Button icon={<DownloadOutlined />} onClick={handleExport} disabled={running || isEmpty}>
-              导出 JSON
-            </Button>
             <Space>
               <Text>离线模式</Text>
               <Switch checked={offline} onChange={setOffline} disabled={running} size="small" />
@@ -341,7 +338,7 @@ export default function EvalPage() {
       {running && (
         <Card size="small" style={{ marginBottom: 16 }}>
           <Text type="secondary">
-            <LoadingOutlined /> 评估运行中，完成后将一次性展示全部结果...
+            <LoadingOutlined /> 评估运行中，结果将实时显示...
           </Text>
         </Card>
       )}
@@ -356,7 +353,7 @@ export default function EvalPage() {
           }
           extra={
             <Button size="small" icon={<DownloadOutlined />} onClick={handleExportResult}>
-              导出结果
+              导出 JSON
             </Button>
           }
         >
@@ -372,6 +369,16 @@ export default function EvalPage() {
       )}
 
       {!running && total === 0 && <Empty description="填写用例后点击“开始评估”" />}
+
+      <Modal
+        title="模型输出"
+        open={modalOutput !== null}
+        onCancel={() => setModalOutput(null)}
+        footer={null}
+        width={800}
+      >
+        <SuperMarkdown>{modalOutput || ""}</SuperMarkdown>
+      </Modal>
     </div>
   );
 }

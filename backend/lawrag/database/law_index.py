@@ -218,6 +218,20 @@ class LawIndexManager:
             await session.execute(delete(LawIndex).where(col(LawIndex.law_id) == law_id))
             await session.commit()
 
+    async def aclear_content(self, id: UUID) -> str:
+        """Clear downloaded raw/structured columns; the law must not be imported into law_nodes."""
+        async with self.__db.asession() as session:
+            result = await session.execute(select(LawIndex).where(col(LawIndex.id) == id))
+            row = result.scalars().first()
+            if row is None:
+                raise ValueError("法律索引不存在")
+            node_result = await session.execute(select(count(col(LawNode.id))).where(col(LawNode.law_index_id) == id))
+            if (node_result.scalar() or 0) > 0:
+                raise ValueError(f"法律 {row.law_name} 已导入节点, 请先删除节点后再清除下载文档")
+            await session.execute(update(LawIndex).where(col(LawIndex.id) == id).values(raw=None, structured=None))
+            await session.commit()
+            return row.law_name
+
     async def afind_download_candidates(
         self,
         law_types: frozenset[str] | None = frozenset({"宪法", "法律"}),
@@ -274,7 +288,7 @@ class LawIndexManager:
                     count(col(LawNode.id)),
                     count(col(LawNode.id)).filter(col(LawNode.node_type) == "article"),
                 )
-                .where(~col(LawNode.law_name).in_(select(col(LawIndex.law_name))))
+                .where(col(LawNode.law_index_id).is_(None))
                 .group_by(col(LawNode.law_name))
                 .order_by(col(LawNode.law_name))
             )

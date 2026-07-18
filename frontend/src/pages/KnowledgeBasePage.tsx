@@ -1,4 +1,5 @@
 import {
+  ClearOutlined,
   CloudDownloadOutlined,
   DatabaseOutlined,
   DeleteOutlined,
@@ -12,7 +13,15 @@ import {
 import { App, Button, Cascader, Input, Modal, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { deleteLaw, getKbOverview, triggerCrawl, triggerDownload, triggerEmbed, triggerImport } from "@/api/kb";
+import {
+  deleteLaw,
+  deleteLawContent,
+  getKbOverview,
+  triggerCrawl,
+  triggerDownload,
+  triggerEmbed,
+  triggerImport,
+} from "@/api/kb";
 import type { KbLawOverviewItem } from "@/api/types";
 
 const { Title } = Typography;
@@ -215,6 +224,28 @@ export default function KnowledgeBasePage() {
     });
   };
 
+  const handleDeleteContent = (record: KbLawOverviewItem) => {
+    modal.confirm({
+      title: "确认删除下载文档",
+      content: `将清除法律 "${record.law_name}" 已下载的原始文本与解析数据 (raw/structured)，保留爬虫索引记录。`,
+      okText: "确认删除",
+      okType: "danger",
+      onOk: async () => {
+        try {
+          const res = await deleteLawContent(record.id);
+          if (res.success) {
+            message.success(res.status);
+          } else {
+            message.error(res.status);
+          }
+          await fetchData();
+        } catch {
+          message.error("删除失败");
+        }
+      },
+    });
+  };
+
   const handleCrawlConfirm = async () => {
     try {
       const res = await triggerCrawl({ category: crawlCategoryRef.current });
@@ -343,6 +374,17 @@ export default function KnowledgeBasePage() {
                     // errors surfaced by individual API calls
                   }
                 }}
+              />
+            </Tooltip>
+          ) : null}
+          {record.has_raw && !record.in_nodes ? (
+            <Tooltip title="删除下载文档 (raw/structured)">
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<ClearOutlined />}
+                onClick={() => handleDeleteContent(record)}
               />
             </Tooltip>
           ) : null}

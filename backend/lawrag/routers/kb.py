@@ -1,4 +1,5 @@
 import logging
+from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks
 
@@ -120,4 +121,15 @@ async def api_kb_delete_law(law_name: str) -> StatusResponse:
         return StatusResponse(success=True, status=f"已删除法律 {law_name} (含 {count} 条法条及关联文档块)")
     except Exception as e:
         logger.exception("KB delete failed")
+        return StatusResponse(success=False, status=f"删除失败: {e!s}")
+
+
+@router.delete("/content/{law_index_id}")
+async def api_kb_delete_content(law_index_id: UUID) -> StatusResponse:
+    try:
+        lm = LawIndexManager()
+        law_name = await lm.aclear_content(law_index_id)
+        return StatusResponse(success=True, status=f"已删除法律 {law_name} 的下载文档 (raw/structured)")
+    except Exception as e:
+        logger.exception("KB content delete failed")
         return StatusResponse(success=False, status=f"删除失败: {e!s}")

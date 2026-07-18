@@ -40,3 +40,7 @@ export async function triggerEmbed(data: KbEmbedRequest) {
 export async function deleteLaw(lawName: string) {
   return request.delete<StatusResponse>(`/kb/laws/${encodeURIComponent(lawName)}`);
 }
+
+export async function deleteLawContent(id: string) {
+  return request.delete<StatusResponse>(`/kb/content/${id}`);
+}

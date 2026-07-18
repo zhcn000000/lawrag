@@ -152,7 +152,7 @@ async def get_article_by_path(
     try:
         if path is None or not path.strip():
             path = "law0"
-        if path != "law0" and not path.startswith("law0/"):
+        elif path != "law0" and not path.startswith("law0/"):
             path = f"law0/{path.removeprefix('/')}".removesuffix("/")
         return await page_index.aget_node_by_path(law_name=law_name, path=path)
     except Exception as e:
@@ -214,7 +214,7 @@ async def browse_law(
     try:
         if path is None or not path.strip():
             path = "law0"
-        if path != "law0" and not path.startswith("law0/"):
+        elif path != "law0" and not path.startswith("law0/"):
             path = f"law0/{path.removeprefix('/')}".removesuffix("/")
         return await page_index.abrowse_law(law_name=law_name, path=path, limit=limit)
     except Exception as e:

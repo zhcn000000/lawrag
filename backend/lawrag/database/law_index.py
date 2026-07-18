@@ -355,7 +355,7 @@ class LawIndexManager:
                     count(col(LawNode.id)).filter(col(LawNode.node_type) == "article"),
                 )
                 .where(col(LawNode.law_index_id).in_(law_index_ids))
-                .group_by(col(LawNode.law_index_id), col(LawNode.law_name))
+                .group_by(col(LawNode.law_name))
             )
             node_result = await session.execute(node_stats_stmt)
             node_rows: Sequence = node_result.fetchall()
@@ -368,7 +368,7 @@ class LawIndexManager:
                 )
                 .join(DocumentTable, col(DocumentTable.node_id) == col(LawNode.id))
                 .where(col(LawNode.law_index_id).in_(law_index_ids))
-                .group_by(col(LawNode.law_index_id), col(LawNode.law_name))
+                .group_by(col(LawNode.law_name))
             )
             chunk_result = await session.execute(chunk_stats_stmt)
             chunk_rows: Sequence = chunk_result.fetchall()

@@ -6,10 +6,10 @@
 
 - `llmserver/`：Python 3.14 + vLLM 多模型推理服务，暴露 OpenAI 兼容 `/v1` 接口。
 - `backend/`：Python 3.14 FastAPI + pydantic-ai 法律 RAG 系统，使用 PostgreSQL + pgvector/vchord_bm25。
-- `frontend/`：Vite + React + TypeScript 前端，由 FastAPI 挂载到 `/webui/*`。
-- `docker/`：数据库和 web 服务的 podman-compose 配置。
-- `examples/report.json`：课程提交版 100 条问答评测结果。
-- `static/`：`just build-ui` 生成的前端静态资源。
+- `frontend/`：Vite 8 + React 19 + TypeScript 前端，由 FastAPI 挂载到 `/webui/*`。
+- `docker/`：数据库 / llmserver / web 服务的 podman-compose 配置。
+- `examples/`：课程提交版产物：`case.json` (100 条问答样本)、`laws.tar.gz` (爬虫抓取的法律/宪法原文)、`report.json` (100 条问答评测结果)。
+- `static/`：`just build-ui` 把 `frontend/dist/` 拷贝到这里，由 FastAPI 在 `/webui/*` 挂载。
 
 进入子目录前先阅读对应的 `AGENTS.md`：
 
@@ -21,15 +21,18 @@
 
 - 模型链路固定走自托管 OpenAI 兼容 vLLM 端点，不再回退到 DSAPI/DeepSeek。
 - `LLM_LINK` 由根目录 `.env` 中的 `LLM_PROTOCOL/LLM_HOST/LLM_PORT` 派生，供 chat、embedding、rerank 共用。
-- 后端默认模型 ID：`qwen3.5`；嵌入模型 ID：`qwen3-embedding`；重排模型 ID：`qwen3-reranker`。
+- 后端默认模型 ID：`qwen3.5`（chat/agent）；嵌入模型 ID：`qwen3-embedding`；重排模型 ID：`qwen3-reranker`。
 - `llmserver/model_launch.json` 必须与上述模型 ID 对齐。
-- 根目录 `.env` 会被 backend、frontend、llmserver 共同读取。
+- 根目录 `.env` 会被 backend、frontend、llmserver 共同读取；`find_project_directory()` 沿父目录向上找 `.proj_root` 标记并 `os.chdir`。
+- 所有 Python 子模块共享 `httpx2`（`httpx` 的积极维护分支），`lawrag/__init__.py` 已把 `httpx2` 别名为 `httpx`。
 
 ## 常用命令
 
 ### 模型后端
 
 ```bash
+just llmserver            # 等价于 cd llmserver && uv run llmserver start
+# 也可手动：
 cd llmserver
 uv sync
 uv run llmserver start --config-path llmserver/model_launch.json --host 0.0.0.0 --port 10001
@@ -40,30 +43,31 @@ uv run llmserver start --config-path llmserver/model_launch.json --host 0.0.0.0 
 ### 后端 / 数据 / 评测
 
 ```bash
-just initdb
-just web
-just spider-crawl
-just spider-download
-just pageindex-import
-just pageindex-embed
-just eval
+just initdb               # 装扩展 + 创建默认账号 admin/admin
+just web                  # 启动 FastAPI (uvicorn 5 workers)
+just spider-crawl         # NPC 数据库索引 → law_index 表
+just spider-download      # 下载 docx 并解析, raw/structured 写回 law_index 表
+just pageindex-import     # law_index.structured → law_nodes
+just pageindex-embed      # 把法条分块并嵌入到 documents 表 (最耗时)
+just eval [LIMIT]         # 跑内置评测, 报告默认写到 lawrag_eval_report.json
+just search QUERY [LIMIT] # 走混合检索 CLI
 ```
 
 ### 前端
 
 ```bash
-just ui
-just build-ui
+just ui                   # Vite 开发服务器 (代理 /api -> 后端)
+just build-ui             # 前端 build + 拷贝到 ./static/
 ```
 
 ### 质量检查
 
 ```bash
-just backend-format
-just backend-lint
-just backend-typecheck
-just frontend-check
-just frontend-typecheck
+just backend-format       # cd backend && uv run ruff format
+just backend-lint         # cd backend && uv run ruff check --fix
+just backend-typecheck    # cd backend && uv run ty check --fix
+just frontend-check       # cd frontend && pnpm check (biome)
+just frontend-typecheck   # cd frontend && pnpm type-check
 ```
 
 `llmserver` 检查命令：

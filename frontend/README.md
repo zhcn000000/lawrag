@@ -5,11 +5,11 @@
 ## 技术栈
 
 - **构建工具**: Vite 8 + `@vitejs/plugin-react`（含 React Compiler preset）
-- **框架**: React 19 + react-router / react-router-dom 7/8
+- **框架**: React 19 + react-router 8 / react-router-dom 7
 - **UI 库**: antd 6 + `@ant-design/icons` + `@ant-design/x` + `@ant-design/x-markdown` + `@ant-design/x-sdk` + `@ant-design/charts` + `@antv/infographic`
 - **样式**: `@emotion/react` + `@emotion/styled` + `@emotion/babel-plugin`（`jsxImportSource: "@emotion/react"`）
 - **状态管理**: Redux Toolkit + react-redux
-- **类型**: TypeScript 7.0.1-rc（`strict: true`，`moduleResolution: "bundler"`）
+- **类型**: TypeScript 7.0.2（`strict: true`，`moduleResolution: "bundler"`）
 - **包管理**: pnpm
 - **测试**: vitest
 
@@ -24,15 +24,27 @@ frontend/
 └── src/
     ├── main.tsx           # 渲染入口（Provider / ConfigProvider / BrowserRouter basename="/webui" / ProtectedRoute）
     ├── App.tsx            # 备用顶层 App（main.tsx 当前为主）
-    ├── layouts/           # MainLayout
-    ├── pages/             # LoginPage / DashboardPage / ChatPage
+    ├── layouts/           # MainLayout（antd ProLayout 风格 + 鉴权壳）
+    ├── pages/             # LoginPage / DashboardPage / ChatPage / KnowledgeBasePage / RagSearchPage / EvalPage
     ├── components/        # SuperMarkdown（Markdown + Mermaid + Infographic 渲染）
-    ├── api/               # auth / chat / session / types
+    ├── api/               # auth / chat / session / kb / rag / eval / types
     ├── store/             # Redux store + slices（authSlice）
     └── utils/             # request.ts (fetch 封装) / navigateRef.ts (非组件内跳转桥接)
 ```
 
 Vite 以 `base: "/webui/"` 输出，本地开发通过 `/api` 代理访问后端；`just build-ui` 把 `frontend/dist/` 拷贝到仓库根 `static/`，由后端 FastAPI 在 `/webui/*` 挂载。`react-router` 也用 `basename="/webui"` 对齐。
+
+## 路由表
+
+| 路径        | 页面                | 鉴权 | 说明                                                       |
+| ----------- | ------------------- | ---- | ---------------------------------------------------------- |
+| `/login`    | `LoginPage`         | 否   | 用户名密码登录，写入 `localStorage.token`                  |
+| `/`         | `DashboardPage`     | 是   | 总览 (默认首页)                                            |
+| `/chat`     | `ChatPage`          | 是   | 流式 Agent 多轮对话                                        |
+| `/kb`       | `KnowledgeBasePage` | 是   | 知识库管理 (按 admin 权限显示 crawl/download/import/embed) |
+| `/search`   | `RagSearchPage`     | 是   | 混合检索 (向量+BM25+rerank) 调试入口                       |
+| `/eval`     | `EvalPage`          | 是   | 评测面板 (服务端流式跑 pydantic-evals + LLMJudge)           |
+| `*`         | `Navigate /`        | —    | 兜底重定向到首页                                           |
 
 ## 开发命令
 

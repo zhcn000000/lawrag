@@ -17,8 +17,8 @@ import type { KbLawOverviewItem } from "@/api/types";
 
 const { Title } = Typography;
 
-const LAW_TYPES = ["宪法", "法律", "行政法规", "监察法规", "司法解释", "地方性法规"];
-const STATUS_LIST = ["有效", "尚未生效", "已修改", "已废止"];
+const LAW_TYPES = ["宪法", "法律", "行政法规", "监察法规", "司法解释", "地方性法规", "未知"];
+const STATUS_LIST = ["有效", "尚未生效", "已修改", "已废止", "未知"];
 
 const CRAWL_CATEGORIES = [
   { value: "xf", label: "宪法" },
@@ -45,6 +45,7 @@ const TAG_COLORS: Record<string, string> = {
   尚未生效: "blue",
   已修改: "orange",
   已废止: "red",
+  未知: "default",
 };
 
 export default function KnowledgeBasePage() {
@@ -309,6 +310,16 @@ export default function KnowledgeBasePage() {
       width: 160,
       render: (_, record) => (
         <Space size="small">
+          {!record.has_raw ? (
+            <Tooltip title="下载原始文件">
+              <Button
+                type="link"
+                size="small"
+                icon={<CloudDownloadOutlined />}
+                onClick={() => triggerDownload({ law_ids: [record.law_name] }).then(() => fetchData())}
+              />
+            </Tooltip>
+          ) : null}
           {record.has_structured && !record.in_nodes ? (
             <Tooltip title="导入到知识库节点">
               <Button

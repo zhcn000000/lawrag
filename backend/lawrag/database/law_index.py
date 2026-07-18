@@ -1,4 +1,5 @@
 import logging
+import operator
 from collections.abc import Sequence
 from datetime import date
 from typing import TypedDict
@@ -260,36 +261,76 @@ class LawIndexManager:
                 for r in rows
             ]
 
-    async def afind_all_with_status(
+    async def _afind_orphan_nodes(
         self,
         *,
-        law_type: str | None = None,
-        status: str | None = None,
         query: str | None = None,
-        limit: int = 20,
-        offset: int = 0,
-    ) -> KbOverviewResult:
-        """Combined overview: law_index entries with law_nodes + documents status."""
+    ) -> list[KbOverviewItem]:
+        """Find law_names that exist in law_nodes but not in law_index."""
         async with self.__db.asession() as session:
-            base_stmt = select(LawIndex).order_by(col(LawIndex.law_type), col(LawIndex.law_name))
-            if law_type is not None:
-                base_stmt = base_stmt.where(col(LawIndex.law_type) == law_type)
-            if status is not None:
-                base_stmt = base_stmt.where(col(LawIndex.status) == status)
+            orphan_stmt = (
+                select(
+                    col(LawNode.law_name),
+                    count(col(LawNode.id)),
+                    count(col(LawNode.id)).filter(col(LawNode.node_type) == "article"),
+                )
+                .where(~col(LawNode.law_name).in_(select(col(LawIndex.law_name))))
+                .group_by(col(LawNode.law_name))
+                .order_by(col(LawNode.law_name))
+            )
             if query is not None:
-                base_stmt = base_stmt.where(col(LawIndex.law_name).ilike(f"%{query}%"))
+                orphan_stmt = orphan_stmt.where(col(LawNode.law_name).ilike(f"%{query}%"))
 
-            count_stmt = select(count(col(LawIndex.id))).select_from(base_stmt.subquery())
-            count_result = await session.execute(count_stmt)
-            total = count_result.scalar() or 0
+            result = await session.execute(orphan_stmt)
+            orphan_rows = result.fetchall()
+            if not orphan_rows:
+                return []
 
-            paged_stmt = base_stmt.limit(limit).offset(offset)
-            result = await session.execute(paged_stmt)
-            index_rows = result.scalars().all()
+            orphan_names = [r[0] for r in orphan_rows]
 
-            if not index_rows:
-                return KbOverviewResult(items=[], total=total)
+            chunk_stmt = (
+                select(
+                    col(LawNode.law_name),
+                    count(col(DocumentTable.id)),
+                )
+                .join(DocumentTable, col(DocumentTable.node_id) == col(LawNode.id))
+                .where(col(LawNode.law_name).in_(orphan_names))
+                .group_by(col(LawNode.law_name))
+            )
+            chunk_result = await session.execute(chunk_stmt)
+            chunk_rows = chunk_result.fetchall()
 
+            def _chunk_count(name: str) -> int:
+                for r in chunk_rows:
+                    if r[0] == name:
+                        return r[1] or 0
+                return 0
+
+            return [
+                KbOverviewItem(
+                    law_id="",
+                    law_name=row[0],
+                    law_type="未知",
+                    status="未知",
+                    publish_date=None,
+                    has_raw=False,
+                    has_structured=False,
+                    in_nodes=True,
+                    article_count=row[2] or 0,
+                    chunk_count=_chunk_count(row[0]),
+                )
+                for row in orphan_rows
+            ]
+
+    async def _build_index_items(
+        self,
+        index_rows: Sequence,
+    ) -> list[KbOverviewItem]:
+        """Enrich LawIndex rows with LawNode + DocumentTable stats."""
+        if not index_rows:
+            return []
+
+        async with self.__db.asession() as session:
             law_names = [r.law_name for r in index_rows]
 
             node_stats_stmt = (
@@ -318,31 +359,90 @@ class LawIndexManager:
             chunk_result = await session.execute(chunk_stats_stmt)
             chunk_rows: Sequence = chunk_result.fetchall()
 
-            def _match(row_id: UUID, row_name: str, stats: Sequence, key_idx: int) -> int:
-                for s in stats:
-                    sid = s[0]
-                    if sid is not None and sid == row_id:
-                        return s[key_idx] or 0
-                for s in stats:
-                    sname = s[1]
-                    if sname is not None and sname == row_name:
-                        return s[key_idx] or 0
-                return 0
+        def _match(row_id: UUID, row_name: str, stats: Sequence, key_idx: int) -> int:
+            for s in stats:
+                sid = s[0]
+                if sid is not None and sid == row_id:
+                    return s[key_idx] or 0
+            for s in stats:
+                sname = s[1]
+                if sname is not None and sname == row_name:
+                    return s[key_idx] or 0
+            return 0
 
-            items = [
-                KbOverviewItem(
-                    law_id=r.law_id,
-                    law_name=r.law_name,
-                    law_type=r.law_type,
-                    status=r.status,
-                    publish_date=r.publish_date,
-                    has_raw=r.raw is not None,
-                    has_structured=r.structured is not None,
-                    in_nodes=_match(r.id, r.law_name, node_rows, 2) > 0,
-                    article_count=_match(r.id, r.law_name, node_rows, 3),
-                    chunk_count=_match(r.id, r.law_name, chunk_rows, 2),
-                )
-                for r in index_rows
-            ]
+        return [
+            KbOverviewItem(
+                law_id=r.law_id,
+                law_name=r.law_name,
+                law_type=r.law_type,
+                status=r.status,
+                publish_date=r.publish_date,
+                has_raw=r.raw is not None,
+                has_structured=r.structured is not None,
+                in_nodes=_match(r.id, r.law_name, node_rows, 2) > 0,
+                article_count=_match(r.id, r.law_name, node_rows, 3),
+                chunk_count=_match(r.id, r.law_name, chunk_rows, 2),
+            )
+            for r in index_rows
+        ]
 
+    async def afind_all_with_status(
+        self,
+        *,
+        law_type: str | None = None,
+        status: str | None = None,
+        query: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> KbOverviewResult:
+        """Combined overview: law_index entries with law_nodes + documents status."""
+        only_unknown = (status == "未知") or (law_type == "未知")
+        show_both = status is None and law_type is None
+
+        if only_unknown:
+            orphans = await self._afind_orphan_nodes(query=query)
+            total = len(orphans)
+            items = orphans[offset : offset + limit]
             return KbOverviewResult(items=items, total=total)
+
+        async with self.__db.asession() as session:
+            base_stmt = select(LawIndex).order_by(col(LawIndex.law_type), col(LawIndex.law_name))
+            if law_type is not None:
+                base_stmt = base_stmt.where(col(LawIndex.law_type) == law_type)
+            if status is not None:
+                base_stmt = base_stmt.where(col(LawIndex.status) == status)
+            if query is not None:
+                base_stmt = base_stmt.where(col(LawIndex.law_name).ilike(f"%{query}%"))
+
+            count_stmt = select(count(col(LawIndex.id))).select_from(base_stmt.subquery())
+            count_result = await session.execute(count_stmt)
+            index_total = count_result.scalar() or 0
+
+            if show_both:
+                orphans = await self._afind_orphan_nodes() if query is None else []
+                total = index_total + len(orphans)
+                if total == 0:
+                    return KbOverviewResult(items=[], total=0)
+
+                result = await session.execute(base_stmt)
+                index_rows = result.scalars().all()
+                index_items = await self._build_index_items(index_rows)
+
+                all_items = index_items + orphans
+                all_items.sort(key=operator.itemgetter("law_type", "law_name"))
+                items = all_items[offset : offset + limit]
+                return KbOverviewResult(items=items, total=total)
+
+            # Regular path: only law_index entries
+            if index_total == 0:
+                return KbOverviewResult(items=[], total=0)
+
+            paged_stmt = base_stmt.limit(limit).offset(offset)
+            result = await session.execute(paged_stmt)
+            index_rows = result.scalars().all()
+
+            if not index_rows:
+                return KbOverviewResult(items=[], total=index_total)
+
+            items = await self._build_index_items(index_rows)
+            return KbOverviewResult(items=items, total=index_total)

@@ -62,7 +62,7 @@ async def evaluate(
     task = get_task(offline=offline)
     results = await dataset.evaluate(
         task=task,
-        max_concurrency=1,
+        max_concurrency=5,
         retry_task=RetryConfig(
             stop=stop_after_attempt(3),
         ),

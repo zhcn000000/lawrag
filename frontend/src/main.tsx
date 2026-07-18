@@ -8,6 +8,7 @@ import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-route
 import MainLayout from "./layouts/MainLayout";
 import ChatPage from "./pages/ChatPage";
 import DashboardPage from "./pages/DashboardPage";
+import EvalPage from "./pages/EvalPage";
 import KnowledgeBasePage from "./pages/KnowledgeBasePage";
 import LoginPage from "./pages/LoginPage";
 import RagSearchPage from "./pages/RagSearchPage";
@@ -85,6 +86,7 @@ createRoot(rootElement).render(
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/kb" element={<KnowledgeBasePage />} />
                 <Route path="/search" element={<RagSearchPage />} />
+                <Route path="/eval" element={<EvalPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

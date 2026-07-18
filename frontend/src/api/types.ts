@@ -126,3 +126,27 @@ export interface KbInfoResponse extends StatusResponse {
   law_types: string[];
   statuses: string[];
 }
+
+// ── Evaluation ──
+
+export interface EvalCase {
+  name: string;
+  question: string;
+  expected_answer: string;
+}
+
+export interface EvalRequest {
+  cases: EvalCase[];
+  offline: boolean;
+}
+
+export interface EvalResultItem {
+  name: string;
+  question: string;
+  expected_answer: string;
+  model_output?: string;
+  evaluation_note?: string;
+  error_message?: string;
+  success: boolean;
+  type: "report" | "failure";
+}

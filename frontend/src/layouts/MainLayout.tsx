@@ -1,6 +1,7 @@
 import {
   DashboardOutlined,
   DatabaseOutlined,
+  ExperimentOutlined,
   FileSearchOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
@@ -40,6 +41,11 @@ const menuItems: MenuProps["items"] = [
     key: "/search",
     icon: <FileSearchOutlined />,
     label: "检索测试",
+  },
+  {
+    key: "/eval",
+    icon: <ExperimentOutlined />,
+    label: "模型评估",
   },
 ];
 

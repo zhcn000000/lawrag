@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from lawrag.chat.struct import SubagentInfo, ToolInfo
+from lawrag.eval.dataset import LawRagCase, LawRagCaseFailure, LawRagCaseReport
 
 
 class StatusResponse(BaseModel):
@@ -248,3 +249,12 @@ class KbEmbedRequest(BaseModel):
 class KbInfoResponse(StatusResponse):
     law_types: list[str]
     statuses: list[str]
+
+
+class EvalRequest(BaseModel):
+    cases: list[LawRagCase]
+    offline: bool = False
+
+
+class EvalResponse(StatusResponse):
+    reports: list[LawRagCaseReport | LawRagCaseFailure]

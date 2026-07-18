@@ -5,12 +5,12 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 
-from lawrag.chat.agent import ModelDeps, agent
 from lawrag.database.user import TokenDataDict, UserManager
 from lawrag.environments import find_project_directory, settings
 from lawrag.routers.user import CurrentUserDep
 
 from .chat import router as chat_router
+from .eval import router as eval_router
 from .kb import router as kb_router
 from .rag import router as rag_router
 from .schema import (
@@ -25,6 +25,7 @@ app = FastAPI()
 app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
 app.include_router(kb_router, prefix="/api/kb", tags=["kb"])
 app.include_router(rag_router, prefix="/api/rag", tags=["rag"])
+app.include_router(eval_router, prefix="/api/eval", tags=["eval"])
 app.include_router(user_router, prefix="/api/users", tags=["users"])
 
 static_path = find_project_directory() / "static"
@@ -97,4 +98,4 @@ async def get_current_user(
     return UserResponse(id=user_info["id"], username=user_info["username"], is_admin=user_info["is_admin"])
 
 
-__all__ = ["ModelDeps", "agent", "app", "chat_router", "kb_router", "rag_router", "user_router"]
+__all__ = ["app"]

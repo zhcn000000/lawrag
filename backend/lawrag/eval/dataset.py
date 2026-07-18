@@ -38,6 +38,7 @@ class LawRagCase(BaseModel):
 
 
 class LawRagCaseReport(BaseModel):
+    type: Literal["report"] = "report"
     name: str
     question: str
     expected_answer: str
@@ -47,6 +48,7 @@ class LawRagCaseReport(BaseModel):
 
 
 class LawRagCaseFailure(BaseModel):
+    type: Literal["failure"] = "failure"
     name: str
     question: str
     expected_answer: str

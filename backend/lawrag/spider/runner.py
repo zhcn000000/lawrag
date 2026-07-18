@@ -74,16 +74,16 @@ async def run_law_index_spider(
 
 
 async def run_content_download(
-    law_ids: list[UUID] | None = None,
+    ids: list[UUID] | None = None,
     extra_settings: dict[str, Any] | None = None,
 ) -> None:
     """Run the Scrapy content download spider that downloads, converts, and stores laws in the database.
 
-    If law_ids is provided, only download those specific law IDs (NPC API bbbs values).
+    If ids is provided, only download the law_index entries with those UUID primary keys.
     """
     settings = CONTENT_DOWNLOAD_SETTINGS.copy()
     if extra_settings:
         settings.update(extra_settings)
 
     runner = AsyncCrawlerRunner(settings)
-    await runner.crawl(ContentDownloadSpider, law_ids=law_ids)
+    await runner.crawl(ContentDownloadSpider, ids=ids)

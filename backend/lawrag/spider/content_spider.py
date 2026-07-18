@@ -25,17 +25,17 @@ class ContentDownloadSpider(Spider):
 
     name = "content_download"
 
-    def __init__(self, law_ids: list[UUID] | None = None, **kwargs: Any) -> None:
+    def __init__(self, ids: list[UUID] | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._total = 0
         self._downloaded = 0
-        self._law_ids = law_ids
+        self._ids = ids
 
     async def start(self) -> AsyncIterator[Request]:
         lm = LawIndexManager()
-        if self._law_ids:
+        if self._ids:
             candidates = await lm.afind_download_candidates(
-                law_ids=self._law_ids,
+                ids=self._ids,
                 law_types=None,
                 regex=None,
                 skip_downloaded=False,

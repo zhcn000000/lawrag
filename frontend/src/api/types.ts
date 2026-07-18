@@ -16,6 +16,7 @@ export interface UserCredentialsRequest {
 export interface UserResponse {
   id: string;
   username: string;
+  is_admin?: boolean;
 }
 
 export interface SearchRequest {
@@ -85,7 +86,7 @@ export interface LawListResponse extends StatusResponse {
 // ── Knowledge Base Management ──
 
 export interface KbLawOverviewItem {
-  law_id: string;
+  id: string;
   law_name: string;
   law_type: string;
   status: string;
@@ -107,15 +108,15 @@ export interface KbCrawlRequest {
 }
 
 export interface KbDownloadRequest {
-  law_ids?: string[];
+  ids?: string[];
 }
 
 export interface KbImportRequest {
-  law_ids: string[];
+  ids: string[];
 }
 
 export interface KbEmbedRequest {
-  law_ids: string[];
+  ids: string[];
   chunk_size?: number;
   chunk_overlap?: number;
   batch_size?: number;

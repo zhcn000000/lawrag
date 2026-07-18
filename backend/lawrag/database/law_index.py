@@ -42,7 +42,7 @@ class LawIndexDict(TypedDict):
 
 
 class KbOverviewItem(TypedDict):
-    law_id: UUID
+    id: UUID
     law_name: str
     law_type: str
     status: str
@@ -224,7 +224,7 @@ class LawIndexManager:
         status: str | None = "有效",
         regex: str | None = "(?<!办)法$",
         skip_downloaded: bool = True,
-        law_ids: list[UUID] | None = None,
+        ids: list[UUID] | None = None,
     ) -> list[LawIndexDict]:
         async with self.__db.asession() as session:
             stmt = select(LawIndex)
@@ -232,8 +232,8 @@ class LawIndexManager:
                 stmt = stmt.where(col(LawIndex.law_type).in_(law_types))
             if status is not None:
                 stmt = stmt.where(col(LawIndex.status) == status)
-            if law_ids is not None:
-                stmt = stmt.where(col(LawIndex.id).in_(law_ids))
+            if ids is not None:
+                stmt = stmt.where(col(LawIndex.id).in_(ids))
             if skip_downloaded:
                 stmt = stmt.where(col(LawIndex.raw).is_(None))
             if regex is not None:
@@ -308,7 +308,7 @@ class LawIndexManager:
 
             return [
                 KbOverviewItem(
-                    law_id=UUID(int=0),
+                    id=UUID(int=0),
                     law_name=row[0],
                     law_type="未知",
                     status="未知",
@@ -372,7 +372,7 @@ class LawIndexManager:
 
         return [
             KbOverviewItem(
-                law_id=r.id,
+                id=r.id,
                 law_name=r.law_name,
                 law_type=r.law_type,
                 status=r.status,
@@ -414,7 +414,7 @@ class LawIndexManager:
             if query is not None:
                 base_stmt = base_stmt.where(col(LawIndex.law_name).ilike(f"%{query}%"))
 
-            count_stmt = select(count(col(LawIndex.id))).select_from(base_stmt.subquery())
+            count_stmt = select(count()).select_from(base_stmt.subquery())
             count_result = await session.execute(count_stmt)
             index_total = count_result.scalar() or 0
 

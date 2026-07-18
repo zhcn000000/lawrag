@@ -119,13 +119,13 @@ class DocumentStore:
         logger.info("Imported %s: %d nodes (%d articles)", law_name, len(nodes), articles)
         return ImportResultDict(file=law_name, status="ok", count=articles, inserted=inserted)
 
-    async def aimport_laws(self, law_id: UUID | None = None, law_name: str | None = None) -> list[ImportResultDict]:
+    async def aimport_laws(self, id: UUID | None = None, law_name: str | None = None) -> list[ImportResultDict]:
 
         lm = LawIndexManager()
         all_entries = await lm.afind_all()
         entries = [e for e in all_entries if e.get("structured") is not None]
-        if law_id is not None:
-            entries = [e for e in entries if e["id"] == law_id]
+        if id is not None:
+            entries = [e for e in entries if e["id"] == id]
         elif law_name is not None:
             entries = [e for e in entries if e["law_name"] == law_name]
 
@@ -190,13 +190,13 @@ class DocumentStore:
 
     async def aembed_laws(
         self,
-        law_id: UUID | None = None,
+        id: UUID | None = None,
         law_name: str | None = None,
         chunk_size: int = 4096,
         chunk_overlap: int = 128,
         batch_size: int = 64,
     ) -> EmbedResultDict:
-        label = str(law_id) if law_id else law_name
+        label = str(id) if id else law_name
         total_nodes = 0
         total_chunks = 0
 
@@ -208,8 +208,8 @@ class DocumentStore:
                     .where(col(LawNode.node_type).in_(EMBEDDABLE_NODE_TYPES))
                     .where(col(DocumentTable.node_id).is_(None))
                 )
-                if law_id is not None:
-                    stmt = stmt.where(col(LawNode.law_index_id) == law_id)
+                if id is not None:
+                    stmt = stmt.where(col(LawNode.law_index_id) == id)
                 elif law_name is not None:
                     stmt = stmt.where(col(LawNode.law_name) == law_name)
                 stmt = stmt.order_by(col(LawNode.law_name), col(LawNode.id)).limit(batch_size)

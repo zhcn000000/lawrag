@@ -15,11 +15,11 @@ from .schema import (
     KbOverviewResponse,
     StatusResponse,
 )
-from .user import CurrentUserDep
+from .user import AdminUserDep
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(dependencies=[CurrentUserDep])
+router = APIRouter(dependencies=[AdminUserDep])
 
 
 @router.get("/overview")
@@ -41,7 +41,7 @@ async def api_kb_overview(
         )
         laws = [
             KbLawOverviewItem(
-                law_id=i["law_id"] or None,
+                id=i["id"] or None,
                 law_name=i["law_name"],
                 law_type=i["law_type"],
                 status=i["status"],
@@ -75,8 +75,8 @@ async def api_kb_download(
     background_tasks: BackgroundTasks,
     request: KbDownloadRequest,
 ) -> StatusResponse:
-    background_tasks.add_task(run_content_download, request.law_ids)
-    logger.info("Download task started: law_ids=%s", request.law_ids)
+    background_tasks.add_task(run_content_download, request.ids)
+    logger.info("Download task started: ids=%s", request.ids)
     return StatusResponse(success=True, status="下载任务已启动")
 
 
@@ -84,9 +84,9 @@ async def api_kb_download(
 async def api_kb_import(request: KbImportRequest) -> StatusResponse:
     try:
         docstore = DocumentStore()
-        for law_id in request.law_ids:
-            await docstore.aimport_laws(law_id=law_id)
-        return StatusResponse(success=True, status=f"已开始导入 {len(request.law_ids)} 部法律")
+        for uid in request.ids:
+            await docstore.aimport_laws(id=uid)
+        return StatusResponse(success=True, status=f"已开始导入 {len(request.ids)} 部法律")
     except Exception as e:
         logger.exception("KB import failed")
         return StatusResponse(success=False, status=f"导入失败: {e!s}")
@@ -99,17 +99,17 @@ async def api_kb_embed(
 ) -> StatusResponse:
     async def _embed() -> None:
         docstore = DocumentStore()
-        for law_id in request.law_ids:
+        for uid in request.ids:
             await docstore.aembed_laws(
-                law_id=law_id,
+                id=uid,
                 chunk_size=request.chunk_size,
                 chunk_overlap=request.chunk_overlap,
                 batch_size=request.batch_size,
             )
 
     background_tasks.add_task(_embed)
-    logger.info("Embed task started: laws=%s", request.law_ids)
-    return StatusResponse(success=True, status=f"嵌入任务已启动 ({len(request.law_ids)} 部法律)")
+    logger.info("Embed task started: laws=%s", request.ids)
+    return StatusResponse(success=True, status=f"嵌入任务已启动 ({len(request.ids)} 部法律)")
 
 
 @router.delete("/laws/{law_name}")

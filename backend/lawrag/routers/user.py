@@ -17,6 +17,7 @@ router = APIRouter()
 user_manager = UserManager()
 
 CurrentUserDep = Security(UserManager.get_current_user)
+AdminUserDep = Security(UserManager.get_current_user, scopes=["admin"])
 
 
 @router.get("/")
@@ -24,7 +25,9 @@ async def list_users(
     token_data: Annotated[TokenDataDict, CurrentUserDep],
 ) -> UserListResponse:
     users = await user_manager.alists()
-    return UserListResponse(users=[UserResponse(id=v["id"], username=v["username"]) for v in users.values()])
+    return UserListResponse(
+        users=[UserResponse(id=v["id"], username=v["username"], is_admin=v["is_admin"]) for v in users.values()],
+    )
 
 
 @router.put("/")
@@ -47,7 +50,7 @@ async def get_user(
     user_info = await user_manager.aget(user_id)
     if user_info is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return UserResponse(id=user_info["id"], username=user_info["username"])
+    return UserResponse(id=user_info["id"], username=user_info["username"], is_admin=user_info["is_admin"])
 
 
 @router.delete("/{user_id}")

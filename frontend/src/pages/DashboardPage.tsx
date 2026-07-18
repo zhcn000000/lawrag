@@ -19,6 +19,7 @@ const { Title } = Typography;
 export default function DashboardPage() {
   const navigate = useNavigate();
   const user = useAppSelector((state) => state.auth.user);
+  const isAdmin = user?.is_admin === true;
   const [sessionCount, setSessionCount] = useState(0);
   const [documentCount, setDocumentCount] = useState(0);
   const [loading, setLoading] = useState(true);

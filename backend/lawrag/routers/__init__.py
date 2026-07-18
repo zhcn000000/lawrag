@@ -94,7 +94,7 @@ async def get_current_user(
     user_info = await user_manager.aget(token_data["user_id"])
     if user_info is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return UserResponse(id=user_info["id"], username=user_info["username"])
+    return UserResponse(id=user_info["id"], username=user_info["username"], is_admin=user_info["is_admin"])
 
 
 __all__ = ["ModelDeps", "agent", "app", "chat_router", "kb_router", "rag_router", "user_router"]

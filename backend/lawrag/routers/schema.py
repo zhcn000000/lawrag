@@ -24,6 +24,7 @@ class UserCredentialsRequest(BaseModel):
 class UserResponse(BaseModel):
     id: UUID
     username: str
+    is_admin: bool = False
 
 
 class UserListResponse(BaseModel):
@@ -208,7 +209,7 @@ class LawTocResponse(StatusResponse):
 
 
 class KbLawOverviewItem(BaseModel):
-    law_id: UUID | None = None
+    id: UUID | None = None
     law_name: str
     law_type: str
     status: str
@@ -230,15 +231,15 @@ class KbCrawlRequest(BaseModel):
 
 
 class KbDownloadRequest(BaseModel):
-    law_ids: list[UUID]
+    ids: list[UUID] | None = None
 
 
 class KbImportRequest(BaseModel):
-    law_ids: list[UUID]
+    ids: list[UUID]
 
 
 class KbEmbedRequest(BaseModel):
-    law_ids: list[UUID]
+    ids: list[UUID]
     chunk_size: int = 4096
     chunk_overlap: int = 128
     batch_size: int = 64

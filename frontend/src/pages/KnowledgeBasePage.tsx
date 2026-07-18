@@ -109,13 +109,13 @@ export default function KnowledgeBasePage() {
 
   const handleBatchImport = async () => {
     const selected = getSelected();
-    const ids = selected.filter((s) => s.has_structured && !s.in_nodes).map((s) => s.law_id);
+    const ids = selected.filter((s) => s.has_structured && !s.in_nodes).map((s) => s.id);
     if (ids.length === 0) {
       message.warning("所选法律无可导入项 (需已解析且未导入)");
       return;
     }
     try {
-      const res = await triggerImport({ law_ids: ids });
+      const res = await triggerImport({ ids });
       message.success(res.status);
       await fetchData();
     } catch {
@@ -125,13 +125,13 @@ export default function KnowledgeBasePage() {
 
   const handleBatchEmbed = async () => {
     const selected = getSelected();
-    const ids = selected.filter((s) => s.in_nodes && s.chunk_count === 0).map((s) => s.law_id);
+    const ids = selected.filter((s) => s.in_nodes && s.chunk_count === 0).map((s) => s.id);
     if (ids.length === 0) {
       message.warning("所选法律无可嵌入项 (需已导入且未嵌入)");
       return;
     }
     try {
-      const res = await triggerEmbed({ law_ids: ids });
+      const res = await triggerEmbed({ ids });
       message.success(res.status);
       setTimeout(() => fetchData(), 2000);
     } catch {
@@ -141,9 +141,9 @@ export default function KnowledgeBasePage() {
 
   const handleBatchImportAndEmbed = async () => {
     const selected = getSelected();
-    const notDownloaded = selected.filter((s) => !s.has_raw).map((s) => s.law_id);
-    const toImport = selected.filter((s) => s.has_structured && !s.in_nodes).map((s) => s.law_id);
-    const toEmbed = selected.filter((s) => s.in_nodes && s.chunk_count === 0).map((s) => s.law_id);
+    const notDownloaded = selected.filter((s) => !s.has_raw).map((s) => s.id);
+    const toImport = selected.filter((s) => s.has_structured && !s.in_nodes).map((s) => s.id);
+    const toEmbed = selected.filter((s) => s.in_nodes && s.chunk_count === 0).map((s) => s.id);
     const allEmbed = [...toImport, ...toEmbed];
     if (toImport.length === 0 && toEmbed.length === 0) {
       message.warning("所选法律无可处理项");
@@ -151,17 +151,17 @@ export default function KnowledgeBasePage() {
     }
     try {
       if (notDownloaded.length > 0) {
-        const dlRes = await triggerDownload({ law_ids: notDownloaded });
+        const dlRes = await triggerDownload({ ids: notDownloaded });
         message.success(dlRes.status);
         await new Promise((resolve) => setTimeout(resolve, 5000));
         await fetchData();
       }
       if (toImport.length > 0) {
-        const importRes = await triggerImport({ law_ids: toImport });
+        const importRes = await triggerImport({ ids: toImport });
         message.success(importRes.status);
       }
       if (allEmbed.length > 0) {
-        const embedRes = await triggerEmbed({ law_ids: allEmbed });
+        const embedRes = await triggerEmbed({ ids: allEmbed });
         message.success(embedRes.status);
       }
       setTimeout(() => fetchData(), 2000);
@@ -227,9 +227,9 @@ export default function KnowledgeBasePage() {
 
   const handleDownload = async () => {
     const selected = getSelected();
-    const lawIds = selected.filter((s) => !s.has_raw).map((s) => s.law_id);
+    const ids = selected.filter((s) => !s.has_raw).map((s) => s.id);
     try {
-      const res = await triggerDownload(lawIds.length > 0 ? { law_ids: lawIds } : {});
+      const res = await triggerDownload(ids.length > 0 ? { ids } : {});
       message.success(res.status);
       setTimeout(() => fetchData(), 3000);
     } catch {
@@ -322,7 +322,7 @@ export default function KnowledgeBasePage() {
                 type="link"
                 size="small"
                 icon={<CloudDownloadOutlined />}
-                onClick={() => triggerDownload({ law_ids: [record.law_id] }).then(() => fetchData())}
+                onClick={() => triggerDownload({ ids: [record.id] }).then(() => fetchData())}
               />
             </Tooltip>
           ) : null}
@@ -335,9 +335,9 @@ export default function KnowledgeBasePage() {
                 onClick={async () => {
                   try {
                     if (!record.in_nodes) {
-                      await triggerImport({ law_ids: [record.law_id] });
+                      await triggerImport({ ids: [record.id] });
                     }
-                    await triggerEmbed({ law_ids: [record.law_id] });
+                    await triggerEmbed({ ids: [record.id] });
                     await fetchData();
                   } catch {
                     // errors surfaced by individual API calls

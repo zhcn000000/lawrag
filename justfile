@@ -63,7 +63,7 @@ backend-typecheck:
   cd backend && uv run ty check --fix
 
 frontend-check:
-  cd frontend && pnpm check --write
+  cd frontend && pnpm check
 frontend-typecheck:
   cd frontend && pnpm type-check
 

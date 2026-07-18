@@ -219,18 +219,19 @@ class LawIndexManager:
 
     async def afind_download_candidates(
         self,
-        law_types: frozenset[str] = frozenset({"宪法", "法律"}),
-        status: str = "有效",
-        regex: str = "(?<!办)法$",
+        law_types: frozenset[str] | None = frozenset({"宪法", "法律"}),
+        status: str | None = "有效",
+        regex: str | None = "(?<!办)法$",
         skip_downloaded: bool = True,
         law_ids: list[str] | None = None,
     ) -> list[LawIndexDict]:
 
         async with self.__db.asession() as session:
-            stmt = select(LawIndex).where(
-                col(LawIndex.status) == status,
-                col(LawIndex.law_type).in_(law_types),
-            )
+            stmt = select(LawIndex)
+            if law_types is not None:
+                stmt = stmt.where(col(LawIndex.law_type).in_(law_types))
+            if status is not None:
+                stmt = stmt.where(col(LawIndex.status) == status)
             if law_ids is not None:
                 stmt = stmt.where(col(LawIndex.law_id).in_(law_ids))
             if skip_downloaded:

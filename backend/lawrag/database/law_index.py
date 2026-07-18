@@ -25,6 +25,11 @@ def _parse_date(value: object) -> date | None:
     return None
 
 
+class LawInfoDict(TypedDict):
+    law_types: list[str]
+    statuses: list[str]
+
+
 class LawIndexDict(TypedDict):
     id: UUID
     law_id: str
@@ -155,6 +160,19 @@ class LawIndexManager:
                 index_number=row.index_number,
                 raw=row.raw,
                 structured=row.structured,
+            )
+
+    async def aget_info(self) -> LawInfoDict:
+        async with self.__db.asession() as session:
+            types_result = await session.execute(
+                select(col(LawIndex.law_type)).distinct().order_by(col(LawIndex.law_type)),
+            )
+            status_result = await session.execute(
+                select(col(LawIndex.status)).distinct().order_by(col(LawIndex.status)),
+            )
+            return LawInfoDict(
+                law_types=[r[0] for r in types_result.fetchall() if r[0]],
+                statuses=[r[0] for r in status_result.fetchall() if r[0]],
             )
 
     async def afind_all(

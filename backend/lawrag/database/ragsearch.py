@@ -153,8 +153,10 @@ class RAGSearch:
         regex: str | None = None,
         vecweight: float = 0.6,
         rrfk: int = 60,
+        score_powered: float = 0.2,
     ) -> list[Document]:
-        assert vecweight >= 0 and vecweight <= 1, "vecweight must be between 0 and 1"
+        assert 0 <= vecweight <= 1, "vecweight must be between 0 and 1"
+        assert 0 < score_powered <= 1, "score_powered must be between 0 and 1"
         search_topn = max(limit * 5, 15)
         async with create_task_group() as tg:
             if vecweight > 0:
@@ -202,4 +204,7 @@ class RAGSearch:
             doc.query_score = doc.query_score or 0.0
 
         documents.sort(key=lambda d: d.query_score or 0, reverse=True)
+        for doc in documents:
+            if doc.query_score is not None:
+                doc.query_score = doc.query_score**score_powered
         return documents

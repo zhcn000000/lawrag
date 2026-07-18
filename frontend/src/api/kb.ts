@@ -4,6 +4,7 @@ import type {
   KbDownloadRequest,
   KbEmbedRequest,
   KbImportRequest,
+  KbInfoResponse,
   KbOverviewResponse,
   StatusResponse,
 } from "./types";
@@ -43,4 +44,8 @@ export async function deleteLaw(lawName: string) {
 
 export async function deleteLawContent(id: string) {
   return request.delete<StatusResponse>(`/kb/content/${id}`);
+}
+
+export async function getKbInfo() {
+  return request.get<KbInfoResponse>("/kb/info");
 }

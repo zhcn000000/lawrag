@@ -121,3 +121,8 @@ export interface KbEmbedRequest {
   chunk_overlap?: number;
   batch_size?: number;
 }
+
+export interface KbInfoResponse extends StatusResponse {
+  law_types: string[];
+  statuses: string[];
+}

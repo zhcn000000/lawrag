@@ -12,6 +12,7 @@ from .schema import (
     KbDownloadRequest,
     KbEmbedRequest,
     KbImportRequest,
+    KbInfoResponse,
     KbLawOverviewItem,
     KbOverviewResponse,
     StatusResponse,
@@ -59,6 +60,17 @@ async def api_kb_overview(
     except Exception as e:
         logger.exception("KB overview failed")
         return KbOverviewResponse(success=False, status=f"获取失败: {e!s}", laws=[])
+
+
+@router.get("/info")
+async def api_kb_info() -> KbInfoResponse:
+    try:
+        lm = LawIndexManager()
+        info = await lm.aget_info()
+        return KbInfoResponse(success=True, status="OK", law_types=info["law_types"], statuses=info["statuses"])
+    except Exception as e:
+        logger.exception("KB info failed")
+        return KbInfoResponse(success=False, status=f"获取失败: {e!s}", law_types=[], statuses=[])
 
 
 @router.post("/crawl")

@@ -243,3 +243,8 @@ class KbEmbedRequest(BaseModel):
     chunk_size: int = 4096
     chunk_overlap: int = 128
     batch_size: int = 64
+
+
+class KbInfoResponse(StatusResponse):
+    law_types: list[str]
+    statuses: list[str]

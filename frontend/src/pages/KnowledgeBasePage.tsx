@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteLaw,
   deleteLawContent,
+  getKbInfo,
   getKbOverview,
   triggerCrawl,
   triggerDownload,
@@ -25,9 +26,6 @@ import {
 import type { KbLawOverviewItem } from "@/api/types";
 
 const { Title } = Typography;
-
-const LAW_TYPES = ["宪法", "法律", "行政法规", "监察法规", "司法解释", "地方性法规"];
-const STATUS_LIST = ["有效", "尚未生效", "已修改", "已废止"];
 
 const CRAWL_CATEGORIES = [
   { value: "xf", label: "宪法" },
@@ -64,13 +62,38 @@ export default function KnowledgeBasePage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [lawTypeFilter, setLawTypeFilter] = useState<string>("法律");
-  const [statusFilter, setStatusFilter] = useState<string>("有效");
+  const [lawTypes, setLawTypes] = useState<string[]>([]);
+  const [statuses, setStatuses] = useState<string[]>([]);
+  const [lawTypeFilter, setLawTypeFilter] = useState<string | undefined>(undefined);
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [stageFilter, setStageFilter] = useState<string[][]>([]);
   const [query, setQuery] = useState("");
   const queryRef = useRef("");
   const [crawlOpen, setCrawlOpen] = useState(false);
   const crawlCategoryRef = useRef("all");
+  const downloadingRef = useRef(false);
+  const embeddingRef = useRef(false);
+
+  useEffect(() => {
+    getKbInfo()
+      .then((res) => {
+        if (res.success) {
+          setLawTypes(res.law_types);
+          setStatuses(res.statuses);
+          setLawTypeFilter((prev) => {
+            if (prev) return prev;
+            if (res.law_types.includes("法律")) return "法律";
+            return prev;
+          });
+          setStatusFilter((prev) => {
+            if (prev) return prev;
+            if (res.statuses.includes("有效")) return "有效";
+            return prev;
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchData = useCallback(
     async (searchQ?: string) => {
@@ -100,8 +123,10 @@ export default function KnowledgeBasePage() {
   );
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (lawTypeFilter !== undefined && statusFilter !== undefined) {
+      fetchData();
+    }
+  }, [fetchData, lawTypeFilter, statusFilter]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const handleSearch = (value: string) => {
@@ -132,18 +157,22 @@ export default function KnowledgeBasePage() {
   };
 
   const handleBatchEmbed = async () => {
+    if (embeddingRef.current) return;
     const selected = getSelected();
     const ids = selected.filter((s) => s.in_nodes).map((s) => s.id);
     if (ids.length === 0) {
       message.warning("所选法律无可嵌入项 (需已导入且未嵌入)");
       return;
     }
+    embeddingRef.current = true;
     try {
       const res = await triggerEmbed({ ids });
       message.success(res.status);
       setTimeout(() => fetchData(), 2000);
     } catch {
       message.error("嵌入失败");
+    } finally {
+      embeddingRef.current = false;
     }
   };
 
@@ -179,6 +208,34 @@ export default function KnowledgeBasePage() {
     });
   };
 
+  const handleBatchDeleteContent = () => {
+    const selected = getSelected();
+    const targets = selected.filter((s) => s.has_raw && !s.in_nodes);
+    if (targets.length === 0) {
+      message.warning("所选法律无可删除下载文档项 (需已下载且未导入)");
+      return;
+    }
+    const names = targets.map((s) => s.law_name);
+    modal.confirm({
+      title: "确认批量删除下载文档",
+      content: `将清除 ${targets.length} 部法律已下载的原始文本与解析数据，保留爬虫索引记录。\n\n法律: ${names.slice(0, 5).join("、")}${names.length > 5 ? ` 等共 ${names.length} 部` : ""}`,
+      okText: "确认删除",
+      okType: "danger",
+      onOk: async () => {
+        for (const item of targets) {
+          try {
+            await deleteLawContent(item.id);
+          } catch {
+            message.error(`删除 ${item.law_name} 下载文档失败`);
+          }
+        }
+        message.success("删除下载文档完成");
+        setSelectedRowKeys([]);
+        await fetchData();
+      },
+    });
+  };
+
   const handleSingleDelete = (lawName: string) => {
     modal.confirm({
       title: "确认删除",
@@ -200,7 +257,7 @@ export default function KnowledgeBasePage() {
   const handleDeleteContent = (record: KbLawOverviewItem) => {
     modal.confirm({
       title: "确认删除下载文档",
-      content: `将清除法律 "${record.law_name}" 已下载的原始文本与解析数据 (raw/structured)，保留爬虫索引记录。`,
+      content: `将清除法律 "${record.law_name}" 已下载的原始文本与解析数据，保留爬虫索引记录。`,
       okText: "确认删除",
       okType: "danger",
       onOk: async () => {
@@ -230,14 +287,18 @@ export default function KnowledgeBasePage() {
   };
 
   const handleDownload = async () => {
+    if (downloadingRef.current) return;
     const selected = getSelected();
     const ids = selected.filter((s) => !s.has_raw).map((s) => s.id);
+    downloadingRef.current = true;
     try {
       const res = await triggerDownload(ids.length > 0 ? { ids } : {});
       message.success(res.status);
       setTimeout(() => fetchData(), 3000);
     } catch {
       message.error("启动下载失败");
+    } finally {
+      downloadingRef.current = false;
     }
   };
 
@@ -255,7 +316,7 @@ export default function KnowledgeBasePage() {
       dataIndex: "law_type",
       key: "law_type",
       width: 100,
-      filters: LAW_TYPES.map((t) => ({ text: t, value: t })),
+      filters: lawTypes.map((t) => ({ text: t, value: t })),
       onFilter: (value, record) => record.law_type === value,
     },
     {
@@ -264,7 +325,7 @@ export default function KnowledgeBasePage() {
       key: "status",
       width: 100,
       render: (s: string) => <Tag color={TAG_COLORS[s] || "default"}>{s}</Tag>,
-      filters: STATUS_LIST.map((s) => ({ text: s, value: s })),
+      filters: statuses.map((s) => ({ text: s, value: s })),
       onFilter: (value, record) => record.status === value,
     },
     {
@@ -326,7 +387,18 @@ export default function KnowledgeBasePage() {
                 type="link"
                 size="small"
                 icon={<CloudDownloadOutlined />}
-                onClick={() => triggerDownload({ ids: [record.id] }).then(() => fetchData())}
+                onClick={async () => {
+                  if (downloadingRef.current) return;
+                  downloadingRef.current = true;
+                  try {
+                    await triggerDownload({ ids: [record.id] });
+                    setTimeout(() => fetchData(), 3000);
+                  } catch {
+                    // surfaced by API call
+                  } finally {
+                    downloadingRef.current = false;
+                  }
+                }}
               />
             </Tooltip>
           ) : null}
@@ -337,21 +409,25 @@ export default function KnowledgeBasePage() {
                 size="small"
                 icon={<ThunderboltOutlined />}
                 onClick={async () => {
+                  if (embeddingRef.current) return;
+                  embeddingRef.current = true;
                   try {
                     if (!record.in_nodes) {
                       await triggerImport({ ids: [record.id] });
                     }
                     await triggerEmbed({ ids: [record.id] });
-                    await fetchData();
+                    setTimeout(() => fetchData(), 2000);
                   } catch {
                     // errors surfaced by individual API calls
+                  } finally {
+                    embeddingRef.current = false;
                   }
                 }}
               />
             </Tooltip>
           ) : null}
           {record.has_raw && !record.in_nodes ? (
-            <Tooltip title="删除下载文档 (raw/structured)">
+            <Tooltip title="删除下载文档">
               <Button
                 type="link"
                 size="small"
@@ -403,7 +479,7 @@ export default function KnowledgeBasePage() {
             setSelectedRowKeys([]);
             setPage(1);
           }}
-          options={LAW_TYPES.map((t) => ({ value: t, label: t }))}
+          options={lawTypes.map((t) => ({ value: t, label: t }))}
         />
         <span>状态:</span>
         <Select
@@ -416,7 +492,7 @@ export default function KnowledgeBasePage() {
             setSelectedRowKeys([]);
             setPage(1);
           }}
-          options={STATUS_LIST.map((s) => ({ value: s, label: s }))}
+          options={statuses.map((s) => ({ value: s, label: s }))}
         />
         <span>阶段:</span>
         <Cascader
@@ -485,6 +561,15 @@ export default function KnowledgeBasePage() {
                 getSelected().filter((s) => s.in_nodes && s.chunk_count === 0).length
               })`
             : ""}
+        </Button>
+        <Button
+          danger
+          icon={<ClearOutlined />}
+          onClick={handleBatchDeleteContent}
+          disabled={selectedRowKeys.length === 0 || getSelected().filter((s) => s.has_raw && !s.in_nodes).length === 0}
+        >
+          删除下载
+          {selectedRowKeys.length > 0 ? ` (${getSelected().filter((s) => s.has_raw && !s.in_nodes).length})` : ""}
         </Button>
         <Button
           danger

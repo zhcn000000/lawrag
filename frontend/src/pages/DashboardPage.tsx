@@ -27,10 +27,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [sessionData, lawData] = await Promise.all([
-          getSessionList(),
-          request.get<LawListResponse>("/rag/pageindex/laws"),
-        ]);
+        const [sessionData, lawData] = await Promise.all([getSessionList(), request.get<LawListResponse>("/rag/laws")]);
         setSessionCount(sessionData.sessions?.length ?? 0);
         setDocumentCount(lawData.laws?.length ?? 0);
       } catch {
@@ -79,14 +76,25 @@ export default function DashboardPage() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={8}>
-          <Card hoverable onClick={() => navigate("/chat")} style={{ cursor: "pointer" }}>
+          <Card hoverable onClick={() => navigate("/search")} style={{ cursor: "pointer" }}>
             <Card.Meta
-              avatar={<CloudOutlined style={{ fontSize: 32, color: "#52c41a" }} />}
-              title="法律知识库"
-              description="浏览和管理已导入的法律条文"
+              avatar={<FileTextOutlined style={{ fontSize: 32, color: "#722ed1" }} />}
+              title="法条检索"
+              description="检索和浏览已导入的法律条文"
             />
           </Card>
         </Col>
+        {isAdmin && (
+          <Col xs={24} sm={12} lg={8}>
+            <Card hoverable onClick={() => navigate("/kb")} style={{ cursor: "pointer" }}>
+              <Card.Meta
+                avatar={<CloudOutlined style={{ fontSize: 32, color: "#52c41a" }} />}
+                title="法律知识库"
+                description="管理知识库：爬取、导入和嵌入法律条文（管理员）"
+              />
+            </Card>
+          </Col>
+        )}
       </Row>
     </div>
   );

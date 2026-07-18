@@ -43,6 +43,8 @@ const menuItems: MenuProps["items"] = [
   },
 ];
 
+const ADMIN_ONLY_KEYS = new Set(["/kb"]);
+
 export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
@@ -50,6 +52,10 @@ export default function MainLayout() {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const { token: themeToken } = theme.useToken();
+
+  const visibleMenuItems = user?.is_admin
+    ? menuItems
+    : menuItems?.filter((item) => !ADMIN_ONLY_KEYS.has(String(item?.key)));
 
   const selectedKeys = [location.pathname];
 
@@ -116,7 +122,13 @@ export default function MainLayout() {
             )}
           </Space>
         </div>
-        <Menu theme="dark" mode="inline" selectedKeys={selectedKeys} items={menuItems} onClick={handleMenuClick} />
+        <Menu
+          theme="dark"
+          mode="inline"
+          selectedKeys={selectedKeys}
+          items={visibleMenuItems}
+          onClick={handleMenuClick}
+        />
       </Sider>
 
       <Layout

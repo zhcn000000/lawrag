@@ -150,6 +150,10 @@ async def get_article_by_path(
     path: Annotated[str, Field(description="层级路径, 原样取自其它工具返回的 `path` 值, 如 'law0/b2/c2/s1'")],
 ) -> Annotated[NodeByPathDict, Field(description="法条 dict 或 null，含 law_name/path/content/node_type 等")]:
     try:
+        if path is None or not path.strip():
+            path = "law0"
+        if path != "law0" and not path.startswith("law0/"):
+            path = f"law0/{path.removeprefix('/')}".removesuffix("/")
         return await page_index.aget_node_by_path(law_name=law_name, path=path)
     except Exception as e:
         raise ModelRetry(f"获取法条信息失败: {e!s}") from e
@@ -200,13 +204,18 @@ async def browse_law(
     law_name: Annotated[str, Field(description="法律名称, 例如'中华人民共和国民法典'")],
     path: Annotated[
         str | None,
-        Field(description="层级路径, 原样取自其它工具返回的 `path` 值 (如 'b2/c2/s1'); 留空(null)浏览顶层"),
+        Field(
+            description="层级路径, 原样取自其它工具返回的 `path` 值 (如 'law0/b2/c2/s1');"
+            " 留空(null)会浏览顶层，但是推荐用law0浏览顶层避免歧义",
+        ),
     ] = None,
     limit: Annotated[int, Field(description="返回条目数量上限")] = 200,
 ) -> Annotated[BrowseResultDict, Field(description="浏览结果 dict, 含 law_name/path/node_type/title/children")]:
     try:
         if path is None or not path.strip():
-            path = "law0/"
+            path = "law0"
+        if path != "law0" and not path.startswith("law0/"):
+            path = f"law0/{path.removeprefix('/')}".removesuffix("/")
         return await page_index.abrowse_law(law_name=law_name, path=path, limit=limit)
     except Exception as e:
         raise ModelRetry(f"浏览法律层级失败: {e!s}") from e

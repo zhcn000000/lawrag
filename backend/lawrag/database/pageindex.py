@@ -156,12 +156,7 @@ class LawPageIndex:
             return list(starmap(_article_dict, result.all()))
 
     async def aget_node_by_path(self, law_name: str, path: str) -> NodeByPathDict:
-        """按层级路径 path 精确获取单个节点信息 (法条或章节标题)。
-
-        path 与 abrowse_law 相同, 会自动补全 ``law0/`` 前缀。返回值字段对齐检索结果单条: 面包屑/路径/内容。
-        """
-        if path is not None and path != "law0" and not path.startswith("law0/"):
-            path = f"law0/{path.removeprefix('/')}".removesuffix("/")
+        """按层级路径 path 精确获取单个节点信息 (法条或章节标题)。"""
         async with self.__db.asession() as session:
             node = (
                 (
@@ -193,8 +188,6 @@ class LawPageIndex:
         path: str,
         limit: int = 200,
     ) -> BrowseResultDict:
-        if path is not None and path != "law0" and not path.startswith("law0/"):
-            path = f"law0/{path.removeprefix('/')}".removesuffix("/")
         async with self.__db.asession() as session:
             current = (
                 (

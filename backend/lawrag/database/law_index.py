@@ -345,7 +345,7 @@ class LawIndexManager:
             return []
 
         async with self.__db.asession() as session:
-            law_names = [r.law_name for r in index_rows]
+            law_index_ids = [r.id for r in index_rows if r.id is not None]
 
             node_stats_stmt = (
                 select(
@@ -354,7 +354,7 @@ class LawIndexManager:
                     count(col(LawNode.id)),
                     count(col(LawNode.id)).filter(col(LawNode.node_type) == "article"),
                 )
-                .where(col(LawNode.law_name).in_(law_names))
+                .where(col(LawNode.law_index_id).in_(law_index_ids))
                 .group_by(col(LawNode.law_index_id), col(LawNode.law_name))
             )
             node_result = await session.execute(node_stats_stmt)
@@ -367,7 +367,7 @@ class LawIndexManager:
                     count(col(DocumentTable.id)),
                 )
                 .join(DocumentTable, col(DocumentTable.node_id) == col(LawNode.id))
-                .where(col(LawNode.law_name).in_(law_names))
+                .where(col(LawNode.law_index_id).in_(law_index_ids))
                 .group_by(col(LawNode.law_index_id), col(LawNode.law_name))
             )
             chunk_result = await session.execute(chunk_stats_stmt)

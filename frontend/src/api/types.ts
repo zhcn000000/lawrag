@@ -74,3 +74,41 @@ export interface TranscriptionResponse extends StatusResponse {
 export interface LawListResponse extends StatusResponse {
   laws?: Record<string, unknown>[];
 }
+
+// ── Knowledge Base Management ──
+
+export interface KbLawOverviewItem {
+  law_name: string;
+  law_type: string;
+  status: string;
+  publish_date: string | null;
+  has_raw: boolean;
+  has_structured: boolean;
+  in_nodes: boolean;
+  article_count: number;
+  chunk_count: number;
+}
+
+export interface KbOverviewResponse extends StatusResponse {
+  laws: KbLawOverviewItem[];
+  total: number;
+}
+
+export interface KbCrawlRequest {
+  category: string;
+}
+
+export interface KbDownloadRequest {
+  law_ids?: string[];
+}
+
+export interface KbImportRequest {
+  law_names: string[];
+}
+
+export interface KbEmbedRequest {
+  law_names: string[];
+  chunk_size?: number;
+  chunk_overlap?: number;
+  batch_size?: number;
+}

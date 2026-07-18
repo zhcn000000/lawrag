@@ -15,7 +15,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "LOG_LEVEL": "INFO",
     "COOKIES_ENABLED": True,
     "REDIRECT_ENABLED": True,
-    "TELNETCONSOLE_ENABLED": True,
     "RETRY_ENABLED": True,
     "RETRY_TIMES": 3,
     "DOWNLOAD_TIMEOUT": 30,
@@ -31,6 +30,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "lawrag.spider.pipelines.LawIndexPipeline": 300,
     },
     "TWISTED_REACTOR_ENABLED": False,
+    "TELNETCONSOLE_ENABLED": False,
 }
 
 LAW_INDEX_SETTINGS: dict[str, Any] = DEFAULT_SETTINGS.copy()
@@ -72,11 +72,21 @@ async def run_law_index_spider(
     await runner.crawl(LawIndexSpider, category=category)
 
 
-async def run_content_download(extra_settings: dict[str, Any] | None = None) -> None:
-    """Run the Scrapy content download spider that downloads, converts, and stores laws in the database."""
+async def run_content_download(
+    law_ids: list[str] | None = None,
+    extra_settings: dict[str, Any] | None = None,
+) -> None:
+    """Run the Scrapy content download spider that downloads, converts, and stores laws in the database.
+
+    If law_ids is provided, only download those specific law IDs (NPC API bbbs values).
+    """
     settings = CONTENT_DOWNLOAD_SETTINGS.copy()
     if extra_settings:
         settings.update(extra_settings)
 
+    spider_kwargs: dict[str, Any] = {}
+    if law_ids:
+        spider_kwargs["law_ids"] = law_ids
+
     runner = AsyncCrawlerRunner(settings)
-    await runner.crawl(ContentDownloadSpider)
+    await runner.crawl(ContentDownloadSpider, **spider_kwargs)

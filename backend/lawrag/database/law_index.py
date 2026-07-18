@@ -2,13 +2,15 @@ import logging
 from collections.abc import Sequence
 from datetime import date
 from typing import TypedDict
+from uuid import UUID
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.sql.functions import count
 from sqlmodel import col
 
 from .database import DatabaseManager
-from .tables import LawIndex
+from .tables import DocumentTable, LawIndex, LawNode
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,7 @@ def _parse_date(value: object) -> date | None:
 
 
 class LawIndexDict(TypedDict):
+    id: UUID
     law_id: str
     law_name: str
     office: str
@@ -35,6 +38,24 @@ class LawIndexDict(TypedDict):
     index_number: str
     raw: str | None
     structured: dict | None
+
+
+class KbOverviewItem(TypedDict):
+    law_id: str
+    law_name: str
+    law_type: str
+    status: str
+    publish_date: date | None
+    has_raw: bool
+    has_structured: bool
+    in_nodes: bool
+    article_count: int
+    chunk_count: int
+
+
+class KbOverviewResult(TypedDict):
+    items: list[KbOverviewItem]
+    total: int
 
 
 class LawIndexManager:
@@ -122,6 +143,7 @@ class LawIndexManager:
             if row is None:
                 return None
             return LawIndexDict(
+                id=row.id,
                 law_id=row.law_id,
                 law_name=row.law_name,
                 office=row.office,
@@ -162,6 +184,7 @@ class LawIndexManager:
             rows = result.scalars().all()
             return [
                 LawIndexDict(
+                    id=r.id,
                     law_id=r.law_id,
                     law_name=r.law_name,
                     office=r.office,
@@ -200,6 +223,7 @@ class LawIndexManager:
         status: str = "有效",
         regex: str = "(?<!办)法$",
         skip_downloaded: bool = True,
+        law_ids: list[str] | None = None,
     ) -> list[LawIndexDict]:
 
         async with self.__db.asession() as session:
@@ -207,6 +231,8 @@ class LawIndexManager:
                 col(LawIndex.status) == status,
                 col(LawIndex.law_type).in_(law_types),
             )
+            if law_ids is not None:
+                stmt = stmt.where(col(LawIndex.law_id).in_(law_ids))
             if skip_downloaded:
                 stmt = stmt.where(col(LawIndex.raw).is_(None))
             if regex is not None:
@@ -217,6 +243,7 @@ class LawIndexManager:
             rows = result.scalars().all()
             return [
                 LawIndexDict(
+                    id=r.id,
                     law_id=r.law_id,
                     law_name=r.law_name,
                     office=r.office,
@@ -231,3 +258,90 @@ class LawIndexManager:
                 )
                 for r in rows
             ]
+
+    async def afind_all_with_status(
+        self,
+        *,
+        law_type: str | None = None,
+        status: str | None = None,
+        query: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> KbOverviewResult:
+        """Combined overview: law_index entries with law_nodes + documents status."""
+        async with self.__db.asession() as session:
+            base_stmt = select(LawIndex).order_by(col(LawIndex.law_type), col(LawIndex.law_name))
+            if law_type is not None:
+                base_stmt = base_stmt.where(col(LawIndex.law_type) == law_type)
+            if status is not None:
+                base_stmt = base_stmt.where(col(LawIndex.status) == status)
+            if query is not None:
+                base_stmt = base_stmt.where(col(LawIndex.law_name).ilike(f"%{query}%"))
+
+            count_stmt = select(count(col(LawIndex.id))).select_from(base_stmt.subquery())
+            count_result = await session.execute(count_stmt)
+            total = count_result.scalar() or 0
+
+            paged_stmt = base_stmt.limit(limit).offset(offset)
+            result = await session.execute(paged_stmt)
+            index_rows = result.scalars().all()
+
+            if not index_rows:
+                return KbOverviewResult(items=[], total=total)
+
+            law_names = [r.law_name for r in index_rows]
+
+            node_stats_stmt = (
+                select(
+                    col(LawNode.law_index_id),
+                    col(LawNode.law_name),
+                    count(col(LawNode.id)),
+                    count(col(LawNode.id)).filter(col(LawNode.node_type) == "article"),
+                )
+                .where(col(LawNode.law_name).in_(law_names))
+                .group_by(col(LawNode.law_index_id), col(LawNode.law_name))
+            )
+            node_result = await session.execute(node_stats_stmt)
+            node_rows: Sequence = node_result.fetchall()
+
+            chunk_stats_stmt = (
+                select(
+                    col(LawNode.law_index_id),
+                    col(LawNode.law_name),
+                    count(col(DocumentTable.id)),
+                )
+                .join(DocumentTable, col(DocumentTable.node_id) == col(LawNode.id))
+                .where(col(LawNode.law_name).in_(law_names))
+                .group_by(col(LawNode.law_index_id), col(LawNode.law_name))
+            )
+            chunk_result = await session.execute(chunk_stats_stmt)
+            chunk_rows: Sequence = chunk_result.fetchall()
+
+            def _match(row_id: UUID, row_name: str, stats: Sequence, key_idx: int) -> int:
+                for s in stats:
+                    sid = s[0]
+                    if sid is not None and sid == row_id:
+                        return s[key_idx] or 0
+                for s in stats:
+                    sname = s[1]
+                    if sname is not None and sname == row_name:
+                        return s[key_idx] or 0
+                return 0
+
+            items = [
+                KbOverviewItem(
+                    law_id=r.law_id,
+                    law_name=r.law_name,
+                    law_type=r.law_type,
+                    status=r.status,
+                    publish_date=r.publish_date,
+                    has_raw=r.raw is not None,
+                    has_structured=r.structured is not None,
+                    in_nodes=_match(r.id, r.law_name, node_rows, 2) > 0,
+                    article_count=_match(r.id, r.law_name, node_rows, 3),
+                    chunk_count=_match(r.id, r.law_name, chunk_rows, 2),
+                )
+                for r in index_rows
+            ]
+
+            return KbOverviewResult(items=items, total=total)

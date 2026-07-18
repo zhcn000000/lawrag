@@ -1,5 +1,6 @@
 import {
   DashboardOutlined,
+  DatabaseOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -28,6 +29,11 @@ const menuItems: MenuProps["items"] = [
     key: "/chat",
     icon: <RobotOutlined />,
     label: "AI 法律问答",
+  },
+  {
+    key: "/kb",
+    icon: <DatabaseOutlined />,
+    label: "知识库管理",
   },
 ];
 

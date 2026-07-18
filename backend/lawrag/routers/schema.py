@@ -202,3 +202,42 @@ class LawListResponse(StatusResponse):
 class LawTocResponse(StatusResponse):
     law_name: str
     toc: list[TocEntryItem]
+
+
+# ── Knowledge Base Management ──
+
+
+class KbLawOverviewItem(BaseModel):
+    law_name: str
+    law_type: str
+    status: str
+    publish_date: str | None = None
+    has_raw: bool = False
+    has_structured: bool = False
+    in_nodes: bool = False
+    article_count: int = 0
+    chunk_count: int = 0
+
+
+class KbOverviewResponse(StatusResponse):
+    laws: list[KbLawOverviewItem]
+    total: int = 0
+
+
+class KbCrawlRequest(BaseModel):
+    category: str = "all"
+
+
+class KbDownloadRequest(BaseModel):
+    law_ids: list[str] | None = None
+
+
+class KbImportRequest(BaseModel):
+    law_names: list[str]
+
+
+class KbEmbedRequest(BaseModel):
+    law_names: list[str]
+    chunk_size: int = 4096
+    chunk_overlap: int = 128
+    batch_size: int = 64

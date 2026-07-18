@@ -68,7 +68,7 @@ class DocumentStore:
 
     # ── 法律导入 ──
 
-    async def aimport_parsed(self, law_name: str, parsed: dict) -> ImportResultDict:
+    async def aimport_parsed(self, law_name: str, parsed: dict, law_index_id: UUID | None = None) -> ImportResultDict:
         nodes = flatten_hierarchy(parsed, law_name)
         articles = sum(1 for n in nodes if n["node_type"] == "article")
         if articles == 0:
@@ -89,6 +89,7 @@ class DocumentStore:
             {
                 "id": ids[i],
                 "law_name": law_name,
+                "law_index_id": law_index_id,
                 "parent_id": ids[n["parent"]] if n["parent"] is not None else None,
                 "node_type": n["node_type"],
                 "number": n["number"],
@@ -132,7 +133,7 @@ class DocumentStore:
                 logger.info("Importing %s from database...", entry["law_name"])
                 structured = entry["structured"]
                 assert structured is not None
-                result = await self.aimport_parsed(entry["law_name"], structured)
+                result = await self.aimport_parsed(entry["law_name"], structured, law_index_id=entry["id"])
                 results.append(result)
             except Exception:
                 logger.exception("Failed to import %s", entry["law_name"])

@@ -112,6 +112,32 @@ class HistoryTable(SQLModel, table=True):
     messages: Annotated[list[Any], Field(sa_column=Column(JSONB, nullable=False, server_default="[]"))]
 
 
+class LawIndex(SQLModel, table=True):
+    __tablename__ = "law_index"  # pyright: ignore
+
+    id: Annotated[
+        UUID,
+        Field(
+            sa_column=Column(
+                Uuid[UUID](native_uuid=True, as_uuid=True),
+                primary_key=True,
+                server_default=func.uuidv7(),
+            ),
+        ),
+    ]
+    law_id: Annotated[str, Field(sa_column=Column(String(64), unique=True, nullable=False, index=True))]
+    law_name: Annotated[str, Field(sa_column=Column(String(512), nullable=False, index=True))]
+    office: Annotated[str, Field(sa_column=Column(String(256), nullable=False))]
+    publish_date: Annotated[date | None, Field(sa_column=Column(Date, nullable=True))]
+    expiry_date: Annotated[date | None, Field(sa_column=Column(Date, nullable=True))]
+    law_type: Annotated[str, Field(sa_column=Column(String(64), nullable=False))]
+    status: Annotated[str, Field(sa_column=Column(String(16), nullable=False))]
+    detail_url: Annotated[str, Field(sa_column=Column(String(512), nullable=False))]
+    index_number: Annotated[str, Field(sa_column=Column(String(16), nullable=False))]
+    raw: Annotated[str | None, Field(sa_column=Column(Text, nullable=True))]
+    structured: Annotated[dict | None, Field(sa_column=Column(JSONB, nullable=True))]
+
+
 class LawNode(SQLModel, table=True):
     __tablename__ = "law_nodes"  # pyright: ignore
 
@@ -130,7 +156,18 @@ class LawNode(SQLModel, table=True):
         Field(
             sa_column=Column(
                 Uuid[UUID](native_uuid=True, as_uuid=True),
-                ForeignKey("law_nodes.id", onupdate="CASCADE", ondelete="CASCADE"),
+                ForeignKey(f"{__tablename__}.id", onupdate="CASCADE", ondelete="CASCADE"),
+                nullable=True,
+                index=True,
+            ),
+        ),
+    ]
+    law_index_id: Annotated[
+        UUID | None,
+        Field(
+            sa_column=Column(
+                Uuid[UUID](native_uuid=True, as_uuid=True),
+                ForeignKey(col(LawIndex.id), onupdate="CASCADE", ondelete="SET NULL"),
                 nullable=True,
                 index=True,
             ),
@@ -163,32 +200,6 @@ class LawNode(SQLModel, table=True):
                 unique=True,
             ),
         )
-
-
-class LawIndex(SQLModel, table=True):
-    __tablename__ = "law_index"  # pyright: ignore
-
-    id: Annotated[
-        UUID,
-        Field(
-            sa_column=Column(
-                Uuid[UUID](native_uuid=True, as_uuid=True),
-                primary_key=True,
-                server_default=func.uuidv7(),
-            ),
-        ),
-    ]
-    law_id: Annotated[str, Field(sa_column=Column(String(64), unique=True, nullable=False, index=True))]
-    law_name: Annotated[str, Field(sa_column=Column(String(512), nullable=False, index=True))]
-    office: Annotated[str, Field(sa_column=Column(String(256), nullable=False))]
-    publish_date: Annotated[date | None, Field(sa_column=Column(Date, nullable=True))]
-    expiry_date: Annotated[date | None, Field(sa_column=Column(Date, nullable=True))]
-    law_type: Annotated[str, Field(sa_column=Column(String(64), nullable=False))]
-    status: Annotated[str, Field(sa_column=Column(String(16), nullable=False))]
-    detail_url: Annotated[str, Field(sa_column=Column(String(512), nullable=False))]
-    index_number: Annotated[str, Field(sa_column=Column(String(16), nullable=False))]
-    raw: Annotated[str | None, Field(sa_column=Column(Text, nullable=True))]
-    structured: Annotated[dict | None, Field(sa_column=Column(JSONB, nullable=True))]
 
 
 class DocumentTable(SQLModel, table=True):

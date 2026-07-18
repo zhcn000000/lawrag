@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Generator
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlencode, urlparse
+from uuid import UUID
 
 from scrapy import Request, Spider
 from scrapy.http.response import Response
@@ -24,7 +25,7 @@ class ContentDownloadSpider(Spider):
 
     name = "content_download"
 
-    def __init__(self, law_ids: list[str] | None = None, **kwargs: Any) -> None:
+    def __init__(self, law_ids: list[UUID] | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._total = 0
         self._downloaded = 0

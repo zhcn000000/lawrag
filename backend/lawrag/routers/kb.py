@@ -41,6 +41,7 @@ async def api_kb_overview(
         )
         laws = [
             KbLawOverviewItem(
+                law_id=i["law_id"] or None,
                 law_name=i["law_name"],
                 law_type=i["law_type"],
                 status=i["status"],
@@ -83,9 +84,9 @@ async def api_kb_download(
 async def api_kb_import(request: KbImportRequest) -> StatusResponse:
     try:
         docstore = DocumentStore()
-        for law_name in request.law_names:
-            await docstore.aimport_laws(law_name=law_name)
-        return StatusResponse(success=True, status=f"已开始导入 {len(request.law_names)} 部法律")
+        for law_id in request.law_ids:
+            await docstore.aimport_laws(law_id=law_id)
+        return StatusResponse(success=True, status=f"已开始导入 {len(request.law_ids)} 部法律")
     except Exception as e:
         logger.exception("KB import failed")
         return StatusResponse(success=False, status=f"导入失败: {e!s}")
@@ -98,17 +99,17 @@ async def api_kb_embed(
 ) -> StatusResponse:
     async def _embed() -> None:
         docstore = DocumentStore()
-        for law_name in request.law_names:
+        for law_id in request.law_ids:
             await docstore.aembed_laws(
-                law_name=law_name,
+                law_id=law_id,
                 chunk_size=request.chunk_size,
                 chunk_overlap=request.chunk_overlap,
                 batch_size=request.batch_size,
             )
 
     background_tasks.add_task(_embed)
-    logger.info("Embed task started: laws=%s", request.law_names)
-    return StatusResponse(success=True, status=f"嵌入任务已启动 ({len(request.law_names)} 部法律)")
+    logger.info("Embed task started: laws=%s", request.law_ids)
+    return StatusResponse(success=True, status=f"嵌入任务已启动 ({len(request.law_ids)} 部法律)")
 
 
 @router.delete("/laws/{law_name}")

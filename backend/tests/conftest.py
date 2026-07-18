@@ -23,7 +23,7 @@ async def setup_real_db():
     docstore = DocumentStore()
     test_laws = ["反分裂国家法"]
     for law in test_laws:
-        await docstore.aimport_laws(law)
+        await docstore.aimport_laws(law_name=law)
 
     yield
     for law in test_laws:

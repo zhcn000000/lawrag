@@ -1,5 +1,6 @@
 import logging
 from typing import Any
+from uuid import UUID
 
 from scrapy.crawler import AsyncCrawlerRunner
 
@@ -73,7 +74,7 @@ async def run_law_index_spider(
 
 
 async def run_content_download(
-    law_ids: list[str] | None = None,
+    law_ids: list[UUID] | None = None,
     extra_settings: dict[str, Any] | None = None,
 ) -> None:
     """Run the Scrapy content download spider that downloads, converts, and stores laws in the database.

@@ -109,13 +109,13 @@ export default function KnowledgeBasePage() {
 
   const handleBatchImport = async () => {
     const selected = getSelected();
-    const names = selected.filter((s) => s.has_structured && !s.in_nodes).map((s) => s.law_name);
-    if (names.length === 0) {
+    const ids = selected.filter((s) => s.has_structured && !s.in_nodes).map((s) => s.law_id);
+    if (ids.length === 0) {
       message.warning("所选法律无可导入项 (需已解析且未导入)");
       return;
     }
     try {
-      const res = await triggerImport({ law_names: names });
+      const res = await triggerImport({ law_ids: ids });
       message.success(res.status);
       await fetchData();
     } catch {
@@ -125,13 +125,13 @@ export default function KnowledgeBasePage() {
 
   const handleBatchEmbed = async () => {
     const selected = getSelected();
-    const names = selected.filter((s) => s.in_nodes && s.chunk_count === 0).map((s) => s.law_name);
-    if (names.length === 0) {
+    const ids = selected.filter((s) => s.in_nodes && s.chunk_count === 0).map((s) => s.law_id);
+    if (ids.length === 0) {
       message.warning("所选法律无可嵌入项 (需已导入且未嵌入)");
       return;
     }
     try {
-      const res = await triggerEmbed({ law_names: names });
+      const res = await triggerEmbed({ law_ids: ids });
       message.success(res.status);
       setTimeout(() => fetchData(), 2000);
     } catch {
@@ -142,8 +142,8 @@ export default function KnowledgeBasePage() {
   const handleBatchImportAndEmbed = async () => {
     const selected = getSelected();
     const notDownloaded = selected.filter((s) => !s.has_raw).map((s) => s.law_id);
-    const toImport = selected.filter((s) => s.has_structured && !s.in_nodes).map((s) => s.law_name);
-    const toEmbed = selected.filter((s) => s.in_nodes && s.chunk_count === 0).map((s) => s.law_name);
+    const toImport = selected.filter((s) => s.has_structured && !s.in_nodes).map((s) => s.law_id);
+    const toEmbed = selected.filter((s) => s.in_nodes && s.chunk_count === 0).map((s) => s.law_id);
     const allEmbed = [...toImport, ...toEmbed];
     if (toImport.length === 0 && toEmbed.length === 0) {
       message.warning("所选法律无可处理项");
@@ -157,11 +157,11 @@ export default function KnowledgeBasePage() {
         await fetchData();
       }
       if (toImport.length > 0) {
-        const importRes = await triggerImport({ law_names: toImport });
+        const importRes = await triggerImport({ law_ids: toImport });
         message.success(importRes.status);
       }
       if (allEmbed.length > 0) {
-        const embedRes = await triggerEmbed({ law_names: allEmbed });
+        const embedRes = await triggerEmbed({ law_ids: allEmbed });
         message.success(embedRes.status);
       }
       setTimeout(() => fetchData(), 2000);
@@ -335,9 +335,9 @@ export default function KnowledgeBasePage() {
                 onClick={async () => {
                   try {
                     if (!record.in_nodes) {
-                      await triggerImport({ law_names: [record.law_name] });
+                      await triggerImport({ law_ids: [record.law_id] });
                     }
-                    await triggerEmbed({ law_names: [record.law_name] });
+                    await triggerEmbed({ law_ids: [record.law_id] });
                     await fetchData();
                   } catch {
                     // errors surfaced by individual API calls

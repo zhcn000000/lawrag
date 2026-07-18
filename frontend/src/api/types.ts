@@ -111,11 +111,11 @@ export interface KbDownloadRequest {
 }
 
 export interface KbImportRequest {
-  law_names: string[];
+  law_ids: string[];
 }
 
 export interface KbEmbedRequest {
-  law_names: string[];
+  law_ids: string[];
   chunk_size?: number;
   chunk_overlap?: number;
   batch_size?: number;

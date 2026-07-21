@@ -1,3 +1,5 @@
+from lawrag.routers import app  # ruff:ignore[unsorted-imports]  # to map httpx -> httpx2
+
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -5,6 +7,7 @@ import jwt
 import pytest
 from fastapi import HTTPException
 from fastapi.security import SecurityScopes
+from fastapi.testclient import TestClient
 
 from lawrag.database.history import HistoryStore
 from lawrag.database.user import ALGORITHM, UserManager
@@ -73,8 +76,6 @@ def test_get_current_user_enforces_admin_scope():
 
 @pytest.fixture(scope="module")
 def client():
-    from lawrag.routers import app  # ruff:ignore[unsorted-imports, import-outside-top-level]  # to map httpx -> httpx2
-    from fastapi.testclient import TestClient
 
     with TestClient(app) as test_client:
         yield test_client

@@ -15,6 +15,7 @@ from typer import Argument, Option, Typer
 from lawrag.chat.agent import ModelDeps, agent
 from lawrag.database.document import DocumentStore
 from lawrag.database.initdb import clean_db, init_db, reset_db
+from lawrag.database.law_index import LawIndexManager
 from lawrag.database.pageindex import LawPageIndex, TocEntryDict
 from lawrag.database.ragsearch import RAGSearch
 from lawrag.documents.lawparser import has_parsed_content, parse_multi_level
@@ -326,8 +327,6 @@ async def pageindex_convert(
         errors = sum(1 for r in results if r["status"] == "error")
         logger.info("转换完成: %d OK, %d 跳过, %d 失败 (共 %d)", ok, skipped, errors, len(results))
         return
-
-    from lawrag.database.law_index import LawIndexManager
 
     lm = LawIndexManager()
     entries = await lm.afind_all(has_raw=True)

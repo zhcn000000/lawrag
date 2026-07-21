@@ -57,7 +57,7 @@ async def asplit_document(
 
             current_text = overlap_text + sent_text
             current_tokens = overlap_token_count + sent_tokens
-            overlap_sentences = overlap_sent_list + [(sent_text, sent_tokens)]
+            overlap_sentences = [*overlap_sent_list, (sent_text, sent_tokens)]
 
     if current_text:
         yield Document(

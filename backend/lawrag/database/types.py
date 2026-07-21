@@ -88,7 +88,7 @@ class Password(TypeDecorator):
     def bind_expression(self, bindparam: Any) -> Any:
         return func.crypt(bindparam, func.gen_salt("bf"))
 
-    class comparator_factory(String.Comparator):  # ruff:ignore[invalid-class-name, eq-without-hash] # pyright: ignore
+    class comparator_factory(String.Comparator):  # ruff:ignore[eq-without-hash,invalid-class-name] # pyright: ignore
         def __eq__(self, other: object) -> Any:
             local_pw = type_coerce(self.expr, String)
             return local_pw == func.crypt(other, local_pw)

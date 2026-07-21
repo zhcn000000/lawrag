@@ -111,7 +111,7 @@ async def search(
 
 @cmd.command("eval")
 @runnify
-async def eval(
+async def eval_run(
     input: Annotated[Path | None, Option("--input", "-i", help="评估样本 JSON 输入路径")] = None,
     output: Annotated[Path | None, Option("--output", "-o", help="评估报告 JSON 输出路径")] = None,
     start: Annotated[int, Option("--start", "-s", help="评估样本起始索引")] = 0,

@@ -124,7 +124,8 @@ async def test_credentials_and_session_isolation():
         assert await um.averify_credentials(name_a, "password-a") is not None
         with pytest.raises(HTTPException) as exc_info:
             UserManager.get_current_user(SecurityScopes(), "invalid-token")
-            assert exc_info.value.status_code == 401
+
+        assert exc_info.value.status_code == 401
 
         session_id = await hs.acreate_session("会话A", id_a)
         assert await hs.acheck_session_exists(session_id, id_a)

@@ -86,7 +86,6 @@ torchvision = { index = "pytorch" }
 line-length = 120
 indent-width = 4
 target-version = "py314"
-exclude = [".venv"]
 fix = true
 
 [tool.ruff.analyze]
@@ -104,6 +103,7 @@ select = [
   "PLC",
   "PLW",
   "PLE",
+  "COM",
   "UP",
   "NPY",
   "PD",
@@ -111,6 +111,7 @@ select = [
   "B",
   "C4",
   "FURB",
+  "PT",
   "PTH",
 ]
 ignore = ["bad-dunder-method-name", "too-many-statements-in-try-clause"]

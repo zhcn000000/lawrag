@@ -139,7 +139,7 @@ async def api_chat(
     message_history = await db.aget_messages(session_id)
     deps = ModelDeps(select_toolset=request.tools)
     files: list[Any] = []
-    messages: Sequence[UserContent] = [request.text] + files
+    messages: Sequence[UserContent] = [request.text, *files]
     model_settings = get_model_settings(
         thinking=request.thinking,
     )

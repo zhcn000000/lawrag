@@ -101,7 +101,9 @@ select = [
   "I",
   "N",
   "FAST",
-  "PL",
+  "PLC",
+  "PLW",
+  "PLE",
   "UP",
   "NPY",
   "PD",
@@ -111,7 +113,7 @@ select = [
   "FURB",
   "PTH",
 ]
-ignore = ["PLR", "bad-dunder-method-name", "too-many-statements-in-try-clause"]
+ignore = ["bad-dunder-method-name", "too-many-statements-in-try-clause"]
 fixable = ["ALL"]
 
 [tool.ruff.format]

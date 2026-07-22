@@ -159,24 +159,27 @@ def plot_score_stats(
 
     if scores:
         ax = axes[0]
-        ax.hist(scores, bins=20, color="steelblue", edgecolor="white", alpha=0.85)
+        bins = list(range(12))
+        ax.hist(scores, bins=bins, color="steelblue", edgecolor="white", alpha=0.85, align="left")
         mean_score = statistics.mean(scores)
-        median_score = statistics.median(scores)
-        ax.axvline(mean_score, color="red", linestyle="--", linewidth=1.5, label=f"Mean: {mean_score:.2f}")
-        ax.axvline(median_score, color="orange", linestyle="--", linewidth=1.5, label=f"Median: {median_score:.2f}")
-        ax.set_xlabel("Score")
+        median_score = int(statistics.median(scores))
+        ax.axvline(mean_score, color="red", linestyle="--", linewidth=1.5, label=f"Mean: {mean_score:.1f}")
+        ax.axvline(median_score, color="orange", linestyle="--", linewidth=1.5, label=f"Median: {median_score}")
+        ax.set_xlabel("Score (0-10)")
         ax.set_ylabel("Count")
+        ax.set_xticks(range(11))
+        ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
         ax.set_title(f"Score Distribution (n={len(scores)})")
         ax.legend(fontsize=8)
 
         ax = axes[1]
         stats_text = "\n".join([
             f"Count: {len(scores)}/{total}",
-            f"Mean: {mean_score:.3f}",
-            f"Median: {median_score:.3f}",
-            f"Std: {statistics.stdev(scores):.3f}" if len(scores) > 1 else "Std: N/A",
-            f"Min: {min(scores):.3f}",
-            f"Max: {max(scores):.3f}",
+            f"Mean: {mean_score:.1f}",
+            f"Median: {median_score}",
+            f"Std: {statistics.stdev(scores):.1f}" if len(scores) > 1 else "Std: N/A",
+            f"Min: {int(min(scores))}",
+            f"Max: {int(max(scores))}",
         ])
         ax.axis("off")
         ax.text(
@@ -206,6 +209,7 @@ def plot_score_stats(
     colors = ["#2ecc71", "#e74c3c"]
     bars = ax.bar(["Pass", "Fail"], [passed, failed], color=colors, edgecolor="white")
     ax.set_ylabel("Count")
+    ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
     ax.set_title(f"Pass/Fail ({total} total)")
     for bar, count in zip(bars, [passed, failed], strict=False):
         ax.text(

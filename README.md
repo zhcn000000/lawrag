@@ -56,8 +56,7 @@ lawrag/
 ├── static/                 # `just build-ui` 把 frontend/dist 拷贝到这里, 由 FastAPI /webui/* 挂载
 ├── .proj_root              # 环境变量自动向上查找的仓库根标记
 ├── .env                    # POSTGRES_* / LLM_* 等环境变量
-├── justfile                # 顶层一键命令 (web / initdb / setup / eval / ...)
-└── 法律Agent需求.md         # 课程实习原始需求
+└── justfile                # 顶层一键命令 (web / initdb / setup / eval / ...)
 ```
 
 各子模块的详细目录与模块说明见:

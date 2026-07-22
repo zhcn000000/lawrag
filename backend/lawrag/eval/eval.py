@@ -1,7 +1,10 @@
+import statistics
 from collections.abc import AsyncIterator, Awaitable, Callable
 from logging import getLogger
+from pathlib import Path
 from typing import Any
 
+import matplotlib
 from anyio import create_memory_object_stream
 from anyio.streams.memory import MemoryObjectSendStream
 from asyncer import create_task_group
@@ -10,6 +13,9 @@ from pydantic_evals import Case
 from pydantic_evals.lifecycle import CaseLifecycle
 from pydantic_evals.reporting import ReportCase, ReportCaseFailure
 from tenacity import stop_after_attempt
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 from lawrag.chat.agent import agent, get_model_settings
 from lawrag.chat.struct import ModelDeps
@@ -80,8 +86,9 @@ class LawRagCaseLifecycle(CaseLifecycle[str, str, Any]):
                     question=result.inputs,
                     expected_answer=result.expected_output or "",
                     model_output=result.output,
-                    evaluation_note=result.assertions["llm_judge"].reason or "",
-                    success=result.assertions["llm_judge"].value,
+                    evaluation_note=result.assertions["llm_judge_assertion"].reason or "",
+                    success=result.assertions["llm_judge_assertion"].value,
+                    score=result.scores["llm_judge_score"].value,
                 ),
             )
 
@@ -136,3 +143,92 @@ async def evaluate(
     async for report in evaluate_stream(cases=eval_cases, offline=offline):
         reports.append(report)
     return reports
+
+
+def plot_score_stats(
+    reports: list[LawRagCaseReport | LawRagCaseFailure],
+    output_path: Path | str = "lawrag_eval_stats.png",
+) -> None:
+    scores = [r.score for r in reports if isinstance(r, LawRagCaseReport)]
+    total = len(reports)
+    passed = sum(1 for r in reports if r.success)
+    failed = total - passed
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    fig.suptitle("LawRAG Eval Score Statistics", fontsize=14, fontweight="bold")
+
+    if scores:
+        ax = axes[0]
+        ax.hist(scores, bins=20, color="steelblue", edgecolor="white", alpha=0.85)
+        mean_score = statistics.mean(scores)
+        median_score = statistics.median(scores)
+        ax.axvline(mean_score, color="red", linestyle="--", linewidth=1.5, label=f"Mean: {mean_score:.2f}")
+        ax.axvline(median_score, color="orange", linestyle="--", linewidth=1.5, label=f"Median: {median_score:.2f}")
+        ax.set_xlabel("Score")
+        ax.set_ylabel("Count")
+        ax.set_title(f"Score Distribution (n={len(scores)})")
+        ax.legend(fontsize=8)
+
+        ax = axes[1]
+        stats_text = "\n".join([
+            f"Count: {len(scores)}/{total}",
+            f"Mean: {mean_score:.3f}",
+            f"Median: {median_score:.3f}",
+            f"Std: {statistics.stdev(scores):.3f}" if len(scores) > 1 else "Std: N/A",
+            f"Min: {min(scores):.3f}",
+            f"Max: {max(scores):.3f}",
+        ])
+        ax.axis("off")
+        ax.text(
+            0.5,
+            0.5,
+            stats_text,
+            transform=ax.transAxes,
+            fontsize=12,
+            fontfamily="monospace",
+            verticalalignment="center",
+            horizontalalignment="center",
+            bbox={"boxstyle": "round", "facecolor": "lightgray", "alpha": 0.5},
+        )
+    else:
+        axes[0].axis("off")
+        axes[1].text(
+            0.5,
+            0.5,
+            "No scores available",
+            transform=axes[1].transAxes,
+            fontsize=14,
+            ha="center",
+            va="center",
+        )
+
+    ax = axes[2]
+    colors = ["#2ecc71", "#e74c3c"]
+    bars = ax.bar(["Pass", "Fail"], [passed, failed], color=colors, edgecolor="white")
+    ax.set_ylabel("Count")
+    ax.set_title(f"Pass/Fail ({total} total)")
+    for bar, count in zip(bars, [passed, failed], strict=False):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + max(1, total * 0.01),
+            str(count),
+            ha="center",
+            fontsize=11,
+            fontweight="bold",
+        )
+    rate = passed / total * 100 if total else 0
+    ax.text(
+        0.5,
+        0.85,
+        f"Pass Rate: {rate:.1f}%",
+        transform=ax.transAxes,
+        fontsize=12,
+        fontweight="bold",
+        ha="center",
+        va="center",
+    )
+
+    fig.tight_layout()
+    fig.savefig(str(output_path), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("Score statistics plot saved to: %s", output_path)

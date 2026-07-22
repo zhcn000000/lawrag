@@ -21,7 +21,7 @@ from lawrag.database.ragsearch import RAGSearch
 from lawrag.documents.lawparser import has_parsed_content, parse_multi_level
 from lawrag.environments import find_project_directory, settings
 from lawrag.eval.dataset import LawRagCase, LawRagCaseFailure, LawRagCaseReport
-from lawrag.eval.eval import evaluate
+from lawrag.eval.eval import evaluate, plot_score_stats
 from lawrag.routers import app
 from lawrag.spider.runner import run_content_download, run_law_index_spider
 
@@ -117,6 +117,7 @@ async def eval_run(
     start: Annotated[int, Option("--start", "-s", help="评估样本起始索引")] = 0,
     end: Annotated[int, Option("--end", "-e", "-n", help="评估样本结束索引")] = -1,
     offline: Annotated[bool, Option("--offline", "-f", help="是否离线评估, 禁用 web_toolkit等联网工具")] = False,
+    plot: Annotated[Path | None, Option("--plot", "-p", help="使用 matplotlib 生成评分统计图并保存到指定路径")] = None,
 ) -> None:
     """运行法律问答测试集, 用 LLM 裁判评估 Agent 输出并生成报告。
 
@@ -156,6 +157,9 @@ async def eval_run(
     rate = passed / total if total else 0.0
     print(f"通过率: {rate:.1%} ({passed}/{total})")
     print(f"报告已写入: {output}")
+    if plot is not None:
+        plot_score_stats(reports, output_path=plot)
+        print(f"统计图已写入: {plot}")
 
 
 @database_cmd.command("init")

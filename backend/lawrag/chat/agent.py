@@ -28,7 +28,7 @@ async def metadata_prompt(ctx: RunContext[ModelDeps]):
     time = datetime.now(UTC).isoformat()
     model_name = ctx.model.model_name
     prompt = """你是一名专业的中国法律顾问AI助手。
-请优先使用中文输出和<think>思考</think>，除非用户使用其他语言输入或明确要求使用其他语言。
+请优先使用中文输出和思考，除非用户使用其他语言输入或明确要求使用其他语言。
 
 你可以：
 - 根据法律文档库中的法律法规回答用户的法律问题

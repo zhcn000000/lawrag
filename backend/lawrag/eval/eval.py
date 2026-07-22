@@ -110,7 +110,7 @@ async def evaluate_stream(
         try:
             await dataset.evaluate(
                 task=task,
-                max_concurrency=5,
+                max_concurrency=1,
                 lifecycle=get_lifecycle(send_stream),
                 retry_task=RetryConfig(stop=stop_after_attempt(3)),
                 retry_evaluators=RetryConfig(stop=stop_after_attempt(3)),

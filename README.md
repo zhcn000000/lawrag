@@ -6,7 +6,7 @@
 ## ✨ 特性
 
 - 📚 **自建法律知识库**: 用 `scrapy` 异步爬虫抓取全国人大法律法规数据库, `markitdown` + `parse_multi_level` 把 docx 转结构化 JSON, 支持宪法/法律/行政法规/监察法规/司法解释五大类;
-- 🔍 **混合检索**: 向量 (`qwen3-embedding` 4096 维) + BM25 (`vchord_bm25` + mmh3) 双索引, RRF 融合后用 `qwen3-reranker` 重排, 沿多级 `page index` 拼出面包屑;
+- 🔍 **混合检索**: 向量 (`qwen3-embedding` 4096 维 + `vchord + pgvector`) + BM25 (`vchord_bm25` + mmh3) 双索引, RRF 融合后用 `qwen3-reranker` 重排, 沿多级 `page index` 拼出面包屑;
 - 🧠 **模型后端**: `llmserver/` 基于 vLLM 同时提供 chat / embedding / rerank 的 OpenAI 兼容 `/v1` 接口, 由 `model_launch.json` 管理 `qwen3.5`、`qwen3-embedding`、`qwen3-reranker`;
 - 🤖 **多 Agent 协作**: pydantic-ai 编排 4 个可插拔工具集, 用户可勾选启用:
   - **RAG** (`rag_toolkit`) —— `find_laws / search_documents / get_article_by_path / get_law_articles / get_law_toc / browse_law`;
